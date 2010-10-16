@@ -107,6 +107,10 @@ public class NginxLookupExtension implements ZimbraExtension {
         public NginxLookupException(String msg, Throwable cause) {
             super(msg, cause);
         }
+        
+        public NginxLookupException(Throwable cause) {
+        	super(cause);
+        }
     }
     
     public static class EntryNotFoundException extends NginxLookupException {
