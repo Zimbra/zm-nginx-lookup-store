@@ -62,6 +62,7 @@ import com.zimbra.cs.extension.ExtensionDispatcherServlet;
 import com.zimbra.cs.extension.ExtensionHttpHandler;
 import com.zimbra.cs.extension.ZimbraExtension;
 import com.zimbra.cs.service.AuthProvider;
+import com.zimbra.cs.service.authenticator.ClientCertAuthenticator;
 
 public class NginxLookupExtension implements ZimbraExtension {
 
@@ -185,7 +186,7 @@ public class NginxLookupExtension implements ZimbraExtension {
         public static final String AUTHMETH_OTHER = "other";
         public static final String AUTHMETH_ZIMBRAID = "zimbraId";
         public static final String AUTHMETH_GSSAPI = "gssapi";
-
+        public static final String AUTHMETH_CERTAUTH = "certauth";
         
         public static final Log logger = LogFactory.getLog("zimbra.nginx");
         
@@ -343,6 +344,15 @@ public class NginxLookupExtension implements ZimbraExtension {
                 
                 if (req.serverIp == null)
                     throw new NginxLookupException("(GSSAPI) missing header field " + SERVER_IP);
+            } else if (req.authMethod.equalsIgnoreCase(AUTHMETH_CERTAUTH)) {
+                if (req.adminUser == null)
+                    throw new NginxLookupException("(CERTAUTH) missing header field " + AUTH_ADMIN_USER);
+                
+                if (req.adminPass == null)
+                    throw new NginxLookupException("(CERTAUTH) missing header field " + AUTH_ADMIN_PASS);
+                
+                if (req.serverIp == null)
+                    throw new NginxLookupException("(CERTAUTH) missing header field " + SERVER_IP);
             }
 
             if (req.pass == null)   /* We should not complain on null password */
@@ -373,6 +383,10 @@ public class NginxLookupExtension implements ZimbraExtension {
          *         pattern is incomplete
          */
         private static String unescapeAuthUserAndPass(String src) {
+            if (src == null) {
+                return null;
+            }
+            
             int len = src.length();
             StringBuffer sb = new StringBuffer(src.length());
             int last = 0;
@@ -585,7 +599,8 @@ public class NginxLookupExtension implements ZimbraExtension {
             AuthMechanism.doZimbraAuth((LdapProvisioning)prov, null, adminAcct, req.adminPass, authCtxt);  
         }
         
-        private String genAuthToken(Account authc, Config config, NginxLookupRequest req) throws ServiceException, NginxLookupException {
+        private String genAuthToken(Account authc, Config config, NginxLookupRequest req) 
+        throws ServiceException, NginxLookupException {
             Provisioning prov = Provisioning.getInstance();
             verifyNginxAdmin(prov, config, req);
             
@@ -781,8 +796,8 @@ public class NginxLookupExtension implements ZimbraExtension {
             IP address specified by req.serverIP (X-Proxy-IP request header)
             @return Fully qualified user name (or user-id), else the original user name
          */
-        private String getQualifiedUsername(ZimbraLdapContext zlc, Config config, NginxLookupRequest req) throws ServiceException, NginxLookupException
-        {
+        private String getQualifiedUsername(ZimbraLdapContext zlc, Config config, NginxLookupRequest req) 
+        throws ServiceException, NginxLookupException {
             String aUser, cUser, qUser;
 
             aUser = req.user;               /* AUTHZ (whose route is being discovered) */
@@ -791,7 +806,7 @@ public class NginxLookupExtension implements ZimbraExtension {
 
             Provisioning prov = Provisioning.getInstance();
             Account gssapiAuthC = null;
-
+            
             if (req.authMethod.equalsIgnoreCase(AUTHMETH_ZIMBRAID)) {
                 /* For auth-token based routing, aUser contains the zimbraId of the user
                    No qualification is performed in this case, because the ldap query
@@ -826,6 +841,13 @@ public class NginxLookupExtension implements ZimbraExtension {
                 if (authzIsPrincipal) {
                     qUser = gssapiAuthC.getAttr(Provisioning.A_zimbraMailDeliveryAddress);
                 }
+            } else if (req.authMethod.equalsIgnoreCase(AUTHMETH_CERTAUTH)) {
+                Account certAuthAcct = ClientCertAuthenticator.getAccountByX509SubjectDN(req.user);
+                if (certAuthAcct == null) {
+                    throw new NginxLookupException("account not found: " + req.user);
+                }
+                req.pass = genAuthToken(certAuthAcct, config, req);
+                return certAuthAcct.getName();
             }
 
             /* At this point, qUser is may not be fully qualified, and so the domain must be looked up
@@ -1109,10 +1131,13 @@ public class NginxLookupExtension implements ZimbraExtension {
                 resp.addHeader(AUTH_USER, authUser);
             }
 
-            /* For GSSAPI, we also need to send back the overriden authenticating ID and the auth-token as password */
-
+            
             if (req.authMethod.equalsIgnoreCase(AUTHMETH_GSSAPI)) {
+                // For GSSAPI, we also need to send back the overriden authenticating ID and the auth-token as password
                 resp.addHeader(AUTH_ID, req.cuser);
+                resp.addHeader(AUTH_PASS, req.pass);
+            } else if (req.authMethod.equalsIgnoreCase(AUTHMETH_CERTAUTH)) {
+                // For CERTAUTH, we also need to send back the auth-token as password
                 resp.addHeader(AUTH_PASS, req.pass);
             }
         }
