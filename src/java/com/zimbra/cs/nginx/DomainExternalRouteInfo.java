@@ -14,7 +14,7 @@
  */
 package com.zimbra.cs.nginx;
 
-import com.zimbra.cs.ldap.LdapConstants;
+import com.zimbra.cs.account.ldap.LdapUtil;
 
 public class DomainExternalRouteInfo extends LookupEntry {
     
@@ -43,8 +43,8 @@ public class DomainExternalRouteInfo extends LookupEntry {
                             String imapSSLHostname) {
         super(domainName);
         
-        mUseExternalRoute = LdapConstants.LDAP_TRUE.equals(useExternalRoute);
-        mUseExternalRouteIfAccountNotExist = LdapConstants.LDAP_TRUE.equals(useExternalRouteIfAccountNotExist);
+        mUseExternalRoute = LdapUtil.LDAP_TRUE.equals(useExternalRoute);
+        mUseExternalRouteIfAccountNotExist = LdapUtil.LDAP_TRUE.equals(useExternalRouteIfAccountNotExist);
         
         mPop3Port        = pop3Port;
         mPop3SSLPort     = pop3SSLPort;
