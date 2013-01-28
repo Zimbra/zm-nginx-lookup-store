@@ -956,7 +956,7 @@ public class NginxLookupExtension implements ZimbraExtension {
                 if (req.authMethod.equalsIgnoreCase(AUTHMETH_CERTAUTH)) {
                 	// for cert auth, no need to find the reault port, just
                 	// send back zm_auth_token or zm_admin_auth_token
-                	sendResult(req, "127.0.0.1", "9999", authUser);
+                	sendResult(req, "127.0.0.1", "9999", authUser, prov);
                 	return;
                 }
                 
@@ -1041,7 +1041,7 @@ public class NginxLookupExtension implements ZimbraExtension {
                             Provisioning.A_zimbraReverseProxyUseExternalRouteIfAccountNotExist + " set to TRUE " +
                             "but missing external route info on domain");
                     
-                    sendResult(req, mailhost, port, authUser);
+                    sendResult(req, mailhost, port, authUser, prov);
                     return;
                 }
                 
@@ -1119,7 +1119,7 @@ public class NginxLookupExtension implements ZimbraExtension {
                 if (port == null)
                     port = getPortByMailhostAndProto(zlc, config, req, mailhost);
                 
-                sendResult(req, mailhost, port, authUser);
+                sendResult(req, mailhost, port, authUser, prov);
             } catch (NginxLookupException e) {
                 throw e;
             } catch (ServiceException e) {
@@ -1140,8 +1140,9 @@ public class NginxLookupExtension implements ZimbraExtension {
          * @param port        The requested mail server port
          * @param authUser    If not null, then this value is sent back to override the login 
          *                     user name, (usually) with a domain suffix added
+         * @param prov 
          */
-        private void sendResult(NginxLookupRequest req, String addr, String port, String authUser) throws UnknownHostException {
+        private void sendResult(NginxLookupRequest req, String mailhost, String port, String authUser, Provisioning prov) throws UnknownHostException {
             String addr = InetAddress.getByName(mailhost).getHostAddress();
             logger.debug("mailhost="+mailhost+" ("+addr+")");
             logger.debug("port="+port);
@@ -1158,7 +1159,7 @@ public class NginxLookupExtension implements ZimbraExtension {
             }
 
             try {
-                if (StringUtil.equal(prov.getDomainByEmailAddr(authUser).getName(), 
+                if (StringUtil.equal(prov.getDomainByEmailAddr(authUser).getName(),
                         prov.getConfig().getDefaultDomainName())) {
                     resp.addHeader(AUTH_CACHE_ALIAS, "TRUE");
                 } else {
