@@ -860,7 +860,7 @@ public class NginxLookupExtension implements ZimbraExtension {
                 if (req.authMethod.equalsIgnoreCase(AUTHMETH_CERTAUTH)) {
                 	// for cert auth, no need to find the real route, just
                 	// send back zm_auth_token or zm_admin_auth_token
-                	sendResult(req, "127.0.0.1", "9999", authUser);
+                	sendResult(req, "127.0.0.1", "9999", authUser, false);
                 	return;
                 }
 
@@ -961,7 +961,7 @@ public class NginxLookupExtension implements ZimbraExtension {
                     if(doDnsLookup) {
                         mailhost = this.getIPByIPMode(mailhost).getHostAddress();
                     }
-                    sendResult(req, mailhost, port, authUser);
+                    sendResult(req, mailhost, port, authUser, false);
                     return;
                 }
                 
@@ -1042,7 +1042,7 @@ public class NginxLookupExtension implements ZimbraExtension {
                 if(doDnsLookup) {
                 	mailhost = this.getIPByIPMode(mailhost).getHostAddress();
                 }
-                sendResult(req, mailhost, port, authUser);
+                sendResult(req, mailhost, port, authUser, useExternalRoute);
             } catch (NginxLookupException e) {
                 throw e;
             } catch (ServiceException e) {
@@ -1104,7 +1104,7 @@ public class NginxLookupExtension implements ZimbraExtension {
          * @param useExternalRoute If true, then LC zimbra_reverseproxy_externalroute_include_original_authusername is checked
          *                          to return original req username unmodified
          */
-        private void sendResult(NginxLookupRequest req, String addr, String port, String authUser) throws UnknownHostException {
+        private void sendResult(NginxLookupRequest req, String addr, String port, String authUser, boolean useExternalRoute) throws UnknownHostException {
             ZimbraLog.nginxlookup.debug("mailhost=" + addr);
             ZimbraLog.nginxlookup.debug("port=" + port);
 
