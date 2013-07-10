@@ -585,7 +585,8 @@ public class NginxLookupExtension implements ZimbraExtension {
                     domainExternalRouteInfo = new DomainExternalRouteInfo(domainName, 
                             (String)domainAttrs.get(Provisioning.A_zimbraReverseProxyUseExternalRoute), 
                             (String)domainAttrs.get(Provisioning.A_zimbraReverseProxyUseExternalRouteIfAccountNotExist),
-                            (String)domainAttrs.get(Provisioning.A_zimbraExternalPop3Port), 
+                            (String)domainAttrs.get(Provisioning.A_zimbraReverseProxyExternalRouteIncludeOriginalAuthusername),
+                            (String)domainAttrs.get(Provisioning.A_zimbraExternalPop3Port),
                             (String)domainAttrs.get(Provisioning.A_zimbraExternalPop3SSLPort),
                             (String)domainAttrs.get(Provisioning.A_zimbraExternalImapPort),
                             (String)domainAttrs.get(Provisioning.A_zimbraExternalImapSSLPort),
@@ -860,7 +861,7 @@ public class NginxLookupExtension implements ZimbraExtension {
                 if (req.authMethod.equalsIgnoreCase(AUTHMETH_CERTAUTH)) {
                 	// for cert auth, no need to find the real route, just
                 	// send back zm_auth_token or zm_admin_auth_token
-                	sendResult(req, "127.0.0.1", "9999", authUser, false);
+                	sendResult(req, "127.0.0.1", "9999", authUser, false, false);
                 	return;
                 }
 
@@ -961,7 +962,7 @@ public class NginxLookupExtension implements ZimbraExtension {
                     if(doDnsLookup) {
                         mailhost = this.getIPByIPMode(mailhost).getHostAddress();
                     }
-                    sendResult(req, mailhost, port, authUser, false);
+                    sendResult(req, mailhost, port, authUser, false, false);
                     return;
                 }
                 
@@ -995,10 +996,12 @@ public class NginxLookupExtension implements ZimbraExtension {
                     } else
                         useExternalRoute = ProvisioningConstants.TRUE.equals(useExtRouteOnAcct);
                 }
-                
+                boolean externalRouteIncludeOriginalAuthusername = false;
                 if (useExternalRoute) {
                     ZimbraLog.nginxlookup.debug("fetching external route for user " + authUserWithRealDomainName);
-                    
+
+                    // get whether you need to include domain name
+                    externalRouteIncludeOriginalAuthusername = domain.externalRouteIncludeOriginalAuthusername();
                     // get external host/port on account
                     mailhost = getExternalHostnameOnAccount(req.proto, extraAttrsVals);
                     port = getExternalPortOnAccount(req.proto, extraAttrsVals);  
@@ -1042,7 +1045,7 @@ public class NginxLookupExtension implements ZimbraExtension {
                 if(doDnsLookup) {
                 	mailhost = this.getIPByIPMode(mailhost).getHostAddress();
                 }
-                sendResult(req, mailhost, port, authUser, useExternalRoute);
+                sendResult(req, mailhost, port, authUser, useExternalRoute, externalRouteIncludeOriginalAuthusername);
             } catch (NginxLookupException e) {
                 throw e;
             } catch (ServiceException e) {
@@ -1101,10 +1104,11 @@ public class NginxLookupExtension implements ZimbraExtension {
          * @param port        The requested mail server port
          * @param authUser    If not null, then this value is sent back to override the login
          *                     user name, (usually) with a domain suffix added
-         * @param useExternalRoute If true, then LC zimbra_reverseproxy_externalroute_include_original_authusername is checked
+         * @param useExternalRoute If true, then externalRouteIncludeOriginalAuthusername is checked
          *                          to return original req username unmodified
+         * @param externalRouteIncludeOriginalAuthusername - include original username as requested
          */
-        private void sendResult(NginxLookupRequest req, String addr, String port, String authUser, boolean useExternalRoute) throws UnknownHostException {
+        private void sendResult(NginxLookupRequest req, String addr, String port, String authUser, boolean useExternalRoute, boolean externalRouteIncludeOriginalAuthusername) throws UnknownHostException {
             ZimbraLog.nginxlookup.debug("mailhost=" + addr);
             ZimbraLog.nginxlookup.debug("port=" + port);
 
@@ -1126,7 +1130,7 @@ public class NginxLookupExtension implements ZimbraExtension {
                 resp.addHeader(AUTH_CACHE_ALIAS, "FALSE");
             }
 
-            if (useExternalRoute && LC.zimbra_reverseproxy_externalroute_include_original_authusername.booleanValue()) {
+            if (useExternalRoute && externalRouteIncludeOriginalAuthusername) {
                 authUser = req.user;
             }
 
