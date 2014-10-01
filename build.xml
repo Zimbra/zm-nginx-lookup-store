@@ -8,7 +8,7 @@
 		<pathelement location="${common.classes.dir}" />
 		<pathelement location="${soap.classes.dir}" />
 		<pathelement location="${client.classes.dir}" />
-		<pathelement location="${server.dir}/build/classes"/>
+		<pathelement location="${server.classes.dir}"/>
 		<pathelement location="${build.classes.dir}"/>
 		<fileset dir="${common.dir}/jars"><include name="**/*.jar" /></fileset>
 		<fileset dir="${common.dir}/jars-internal/jars"><include name="**/*.jar" /></fileset>
