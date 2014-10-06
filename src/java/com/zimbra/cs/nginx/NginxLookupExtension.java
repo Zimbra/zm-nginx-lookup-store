@@ -2,11 +2,11 @@
  * ***** BEGIN LICENSE BLOCK *****
  * Zimbra Collaboration Suite Server
  * Copyright (C) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014 Zimbra, Inc.
- * 
+ *
  * This program is free software: you can redistribute it and/or modify it under
  * the terms of the GNU General Public License as published by the Free Software Foundation,
  * version 2 of the License.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
@@ -21,12 +21,9 @@ import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -70,12 +67,10 @@ import com.zimbra.cs.ldap.ZLdapFilterFactory.FilterId;
 import com.zimbra.cs.nginx.AbstractNginxLookupLdapHelper.SearchDirResult;
 import com.zimbra.cs.service.AuthProvider;
 import com.zimbra.cs.service.authenticator.ClientCertAuthenticator;
-import com.zimbra.cs.zookeeper.CuratorManager;
 
 public class NginxLookupExtension implements ZimbraExtension {
 
     public static final String NAME = "nginx-lookup";
-    private static SecureRandom random = new SecureRandom();
 
     private static NginxLookupCache<DomainInfo> sDomainNameByVirtualIpCache =
         new NginxLookupCache<DomainInfo>(
@@ -1059,45 +1054,6 @@ public class NginxLookupExtension implements ZimbraExtension {
 
                 if (mailhost == null)
                     mailhost = vals.get(Provisioning.A_zimbraReverseProxyMailHostAttribute);
-
-                // get active servers
-                CuratorManager curatorManager = CuratorManager.getInstance();
-                if (curatorManager != null) {
-                    Set<String> activeServers = curatorManager.getActiveServers();
-                    String value = curatorManager.getData(authUserWithRealDomainName);
-                    boolean foundRecord = false;
-                    if (value != null) {
-                        String serverId = value.split(":")[0];
-                        if (activeServers.contains(serverId)) {
-                            mailhost = value.split(":")[1];
-                            foundRecord = true;
-                        }
-                    }
-                    if (!foundRecord) {
-                        Server accountHostingServer = prov.getServerByServiceHostname(mailhost);
-                        if (accountHostingServer != null) {
-                            String clusterId = accountHostingServer.getAlwaysOnClusterId();
-                            if (clusterId != null) {
-                                List<Server> servers = prov.getAllServers(Provisioning.SERVICE_MAILBOX, clusterId);
-                                Iterator<Server> iter = servers.iterator();
-                                while (iter.hasNext()) {
-                                    Server s = iter.next();
-                                    if (!activeServers.contains(s.getId())) {
-                                        iter.remove();
-                                    }
-                                }
-                                if (!servers.isEmpty()) {
-                                    // choose the server randomly from the servers list.
-                                    Server selectedServer = servers.get(random.nextInt(servers.size()));
-                                    mailhost = selectedServer.getServiceHostname();
-                                    // store this server info in zookeeper
-                                    curatorManager.setData(authUserWithRealDomainName, selectedServer.getId() + ":" + mailhost);
-                                }
-                            }
-                        }
-                    }
-                }
-
                 if (mailhost == null)
                     throw new NginxLookupException("mailhost not found for user: "+req.user);
 
