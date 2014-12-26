@@ -2,11 +2,11 @@
  * ***** BEGIN LICENSE BLOCK *****
  * Zimbra Collaboration Suite Server
  * Copyright (C) 2011, 2012, 2013, 2014 Zimbra, Inc.
- * 
+ *
  * This program is free software: you can redistribute it and/or modify it under
  * the terms of the GNU General Public License as published by the Free Software Foundation,
  * version 2 of the License.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
@@ -63,19 +63,19 @@ public class NginxLookupLdapHelper extends AbstractNginxLookupLdapHelper {
     Map<String, Object> searchDir(ILdapContext ldapContext, String[] returnAttrs,
             Config config, ZLdapFilter filter, String searchBaseConfigAttr)
     throws NginxLookupException {
-        
+
         ZLdapContext zlc = LdapClient.toZLdapContext(prov, ldapContext);
-        
+
         Map<String, Object> attrs = null;
-        
+
         String base  = config.getAttr(searchBaseConfigAttr);
         if (base == null) {
             base = LdapConstants.DN_ROOT_DSE;
         }
-        
+
         ZSearchControls searchControls = ZSearchControls.createSearchControls(
                 ZSearchScope.SEARCH_SCOPE_SUBTREE, 1, returnAttrs);
-        
+
         ZSearchResultEnumeration ne = null;
         try {
             try {
@@ -91,10 +91,10 @@ public class NginxLookupLdapHelper extends AbstractNginxLookupLdapHelper {
                     ne.close();
                 }
             }
-        } catch (ServiceException e) { 
+        } catch (ServiceException e) {
             throw new NginxLookupException("unable to search LDAP", e);
         }
-        
+
         return attrs;
     }
 
@@ -102,45 +102,45 @@ public class NginxLookupLdapHelper extends AbstractNginxLookupLdapHelper {
     SearchDirResult searchDirectory(ILdapContext ldapContext, String[] returnAttrs,
             Config config, FilterId filterId, String queryTemplate, String searchBase,
             String templateKey, String templateVal, Map<String, Boolean> attrs,
-            Set<String> extraAttrs) 
+            Set<String> extraAttrs)
     throws NginxLookupException {
         ZLdapContext zlc = LdapClient.toZLdapContext(prov, ldapContext);
-        
+
         HashMap<String, String> kv = new HashMap<String,String>();
         kv.put(templateKey, ZLdapFilterFactory.getInstance().encodeValue(templateVal));
-        
+
         String query = config.getAttr(queryTemplate);
         String base  = config.getAttr(searchBase);
         if (query == null)
             throw new NginxLookupException("empty attribute: "+queryTemplate);
-        
+
         ZimbraLog.nginxlookup.debug("query template attr=" + queryTemplate + ", query template=" + query);
         query = StringUtil.fillTemplate(query, kv);
         ZimbraLog.nginxlookup.debug("query=" + query);
-        
+
         if (base == null) {
             base = LdapConstants.DN_ROOT_DSE;
         }
-        
+
         ZSearchControls searchControls = ZSearchControls.createSearchControls(
                 ZSearchScope.SEARCH_SCOPE_SUBTREE, 1, returnAttrs);
-        
+
         SearchDirResult sdr = new SearchDirResult();
-        
+
         ZSearchResultEnumeration ne = null;
         try {
             try {
-                ne = zlc.searchDir(base, 
-                        ZLdapFilterFactory.getInstance().fromFilterString(filterId, query), 
+                ne = zlc.searchDir(base,
+                        ZLdapFilterFactory.getInstance().fromFilterString(filterId, query),
                         searchControls);
-                
+
                 if (!ne.hasMore())
                     throw new EntryNotFoundException("query returned empty result: "+query);
                 ZSearchResultEntry sr = ne.next();
-                
+
                 sdr.configuredAttrs = new HashMap<String, String>();
                 lookupAttrs(sdr.configuredAttrs, config, sr, attrs);
-                
+
                 sdr.extraAttrs = new HashMap<String, String>();
                 if (extraAttrs != null) {
                     ZAttributes ldapAttrs = sr.getAttributes();
@@ -155,14 +155,14 @@ public class NginxLookupLdapHelper extends AbstractNginxLookupLdapHelper {
                     ne.close();
                 }
             }
-        } catch (ServiceException e) { 
+        } catch (ServiceException e) {
             throw new NginxLookupException("unable to search LDAP", e);
         }
-        
+
         return sdr;
     }
 
-    private void lookupAttrs(Map<String, String> vals, Config config, ZSearchResultEntry sr, Map<String, Boolean> keys) 
+    private void lookupAttrs(Map<String, String> vals, Config config, ZSearchResultEntry sr, Map<String, Boolean> keys)
     throws NginxLookupException, LdapException {
         for (Map.Entry<String, Boolean> keyEntry : keys.entrySet()) {
             String key = keyEntry.getKey();
@@ -171,8 +171,8 @@ public class NginxLookupLdapHelper extends AbstractNginxLookupLdapHelper {
                 vals.put(key, val);
         }
     }
-    
-    private String lookupAttr(Config config, ZSearchResultEntry sr, String key, Boolean required) 
+
+    private String lookupAttr(Config config, ZSearchResultEntry sr, String key, Boolean required)
     throws NginxLookupException, LdapException {
         String val = null;
         String attr = config.getAttr(key);
