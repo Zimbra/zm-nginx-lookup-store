@@ -18,6 +18,7 @@
 package com.zimbra.cs.nginx;
 
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -215,13 +216,23 @@ public class NginxLookupHandlerTest {
         return domainName + "." + baseDomainName();
     }
 
+    private String getTestServerAddr() throws UnknownHostException {
+        String addr = System.getenv("ZIMBRA_HOSTNAME");
+        if (addr == null) {
+            addr = InetAddress.getLocalHost().getHostAddress();
+        } else {
+            addr = InetAddress.getByName(addr).getHostAddress();
+        }
+        return addr;
+    }
+
     @Test
     public void imap() throws Exception {
         getOrCreateAccount(USER, DEFAULT_DOMAIN);
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imap.name());
         NginxLookupResponse res = new NginxLookupResponse();
         ldapLookupHandler.search(req, res);
-        assertBasic(res, QUSER, InetAddress.getLocalHost().getHostAddress(), IMAP_PORT);
+        assertBasic(res, QUSER, getTestServerAddr(), IMAP_PORT);
     }
 
     @Test
@@ -230,7 +241,7 @@ public class NginxLookupHandlerTest {
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imapssl.name());
         NginxLookupResponse res = new NginxLookupResponse();
         ldapLookupHandler.search(req, res);
-        assertBasic(res, QUSER, InetAddress.getLocalHost().getHostAddress(), IMAP_SSL_PORT);
+        assertBasic(res, QUSER, getTestServerAddr(), IMAP_SSL_PORT);
     }
 
     @Test
@@ -239,7 +250,7 @@ public class NginxLookupHandlerTest {
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3.name());
         NginxLookupResponse res = new NginxLookupResponse();
         ldapLookupHandler.search(req, res);
-        assertBasic(res, QUSER, InetAddress.getLocalHost().getHostAddress(), POP3_PORT);
+        assertBasic(res, QUSER, getTestServerAddr(), POP3_PORT);
     }
 
     @Test
@@ -248,7 +259,7 @@ public class NginxLookupHandlerTest {
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3ssl.name());
         NginxLookupResponse res = new NginxLookupResponse();
         ldapLookupHandler.search(req, res);
-        assertBasic(res, QUSER, InetAddress.getLocalHost().getHostAddress(), POP3_SSL_PORT);
+        assertBasic(res, QUSER, getTestServerAddr(), POP3_SSL_PORT);
     }
 
     @Test
@@ -257,7 +268,7 @@ public class NginxLookupHandlerTest {
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.http.name());
         NginxLookupResponse res = new NginxLookupResponse();
         ldapLookupHandler.search(req, res);
-        assertBasic(res, QUSER, InetAddress.getLocalHost().getHostAddress(), HTTP_PORT);
+        assertBasic(res, QUSER, getTestServerAddr(), HTTP_PORT);
     }
 
     @Test
