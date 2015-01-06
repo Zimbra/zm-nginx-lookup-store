@@ -78,26 +78,26 @@ public class DomainExternalRouteInfo extends LookupEntry {
     }
 
     String getHostname(String proto) {
-        if (NginxLookupExtension.NginxLookupHandler.POP3.equalsIgnoreCase(proto))
+        if (NginxLookupHandler.POP3.equalsIgnoreCase(proto))
             return mPop3Hostname;
-        else if (NginxLookupExtension.NginxLookupHandler.POP3_SSL.equalsIgnoreCase(proto))
+        else if (NginxLookupHandler.POP3_SSL.equalsIgnoreCase(proto))
             return mPop3SSLHostname;
-        else if (NginxLookupExtension.NginxLookupHandler.IMAP.equalsIgnoreCase(proto))
+        else if (NginxLookupHandler.IMAP.equalsIgnoreCase(proto))
             return mImapHostname;
-        else if (NginxLookupExtension.NginxLookupHandler.IMAP_SSL.equalsIgnoreCase(proto))
+        else if (NginxLookupHandler.IMAP_SSL.equalsIgnoreCase(proto))
             return mImapSSLHostname;
         else
             return null;
     }
     
     String getPort(String proto) {
-        if (NginxLookupExtension.NginxLookupHandler.POP3.equalsIgnoreCase(proto))
+        if (NginxLookupHandler.POP3.equalsIgnoreCase(proto))
             return mPop3Port;
-        else if (NginxLookupExtension.NginxLookupHandler.POP3_SSL.equalsIgnoreCase(proto))
+        else if (NginxLookupHandler.POP3_SSL.equalsIgnoreCase(proto))
             return mPop3SSLPort;
-        else if (NginxLookupExtension.NginxLookupHandler.IMAP.equalsIgnoreCase(proto))
+        else if (NginxLookupHandler.IMAP.equalsIgnoreCase(proto))
             return mImapPort;
-        else if (NginxLookupExtension.NginxLookupHandler.IMAP_SSL.equalsIgnoreCase(proto))
+        else if (NginxLookupHandler.IMAP_SSL.equalsIgnoreCase(proto))
             return mImapSSLPort;
         else
             return null;

@@ -59,17 +59,17 @@ public class ServerInfo extends LookupEntry {
     }
     
     String getPortForProto(String proto, boolean isZimbraAdmin) {
-        if (NginxLookupExtension.NginxLookupHandler.POP3.equalsIgnoreCase(proto))
+        if (NginxLookupHandler.POP3.equalsIgnoreCase(proto))
             return mHttpPop3Port;
-        else if (NginxLookupExtension.NginxLookupHandler.POP3_SSL.equalsIgnoreCase(proto))
+        else if (NginxLookupHandler.POP3_SSL.equalsIgnoreCase(proto))
             return mHttpPop3SSLPort;
-        else if (NginxLookupExtension.NginxLookupHandler.IMAP.equalsIgnoreCase(proto))
+        else if (NginxLookupHandler.IMAP.equalsIgnoreCase(proto))
             return mHttpImapPort;
-        else if (NginxLookupExtension.NginxLookupHandler.IMAP_SSL.equalsIgnoreCase(proto))
+        else if (NginxLookupHandler.IMAP_SSL.equalsIgnoreCase(proto))
             return mHttpImapSSLPort;
-        else if (NginxLookupExtension.NginxLookupHandler.HTTP.equalsIgnoreCase(proto)) {
+        else if (NginxLookupHandler.HTTP.equalsIgnoreCase(proto)) {
             return mHttpPort;            
-        } else if (NginxLookupExtension.NginxLookupHandler.HTTP_SSL.equalsIgnoreCase(proto)) {
+        } else if (NginxLookupHandler.HTTP_SSL.equalsIgnoreCase(proto)) {
             if (isZimbraAdmin) {
                 return mHttpAdminPort;
             } else {
