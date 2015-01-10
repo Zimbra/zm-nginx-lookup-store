@@ -21,7 +21,9 @@ import java.net.InetAddress;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import junit.framework.TestCase;
 
@@ -34,15 +36,13 @@ import org.junit.Test;
 
 import com.zimbra.common.account.Key;
 import com.zimbra.common.account.Key.AccountBy;
+import com.zimbra.common.account.ProvisioningConstants;
 import com.zimbra.common.soap.AdminConstants;
-import com.zimbra.common.util.CliUtil;
 import com.zimbra.cs.account.Account;
 import com.zimbra.cs.account.Config;
 import com.zimbra.cs.account.Domain;
 import com.zimbra.cs.account.Provisioning;
 import com.zimbra.cs.account.soap.SoapProvisioning;
-import com.zimbra.cs.extension.ExtensionUtil;
-import com.zimbra.cs.nginx.NginxLookupExtension;
 import com.zimbra.cs.nginx.NginxLookupHandler;
 
 /**
@@ -65,26 +65,18 @@ public class TestNginxLookup extends TestCase {
 
     private static final String PASSWORD = "test123";
 
-    // private static final String IMAP_HOST = "10.10.131.101";
-    // private static final String IMAP_HOST = "192.168.0.162";
-    private static final String IMAP_HOST_IP = "127.0.0.1";
-    private static final String IMAP_SSL_HOST_IP = "127.0.0.1";
     private static final String IMAP_PORT = "7143";
     private static final String IMAP_SSL_PORT = "7993";
 
-    // private static final String POP3_HOST = "192.168.0.162";
-    private static final String POP3_HOST_IP = "127.0.0.1";
-    private static final String POP3_SSL_HOST_IP = "127.0.0.1";
     private static final String POP3_PORT = "7110";
     private static final String POP3_SSL_PORT = "7995";
 
-//    private static final String HTTP_HOST_IP = "127.0.0.1";
     private static final String HTTP_PORT    = "7070";
 
     private static final String TEST_HOST_DOGFOOD    = "dogfood.zimbra.com";
-    private static final String TEST_HOST_IP_DOGFOOD = "10.113.63.59"; // "207.126.229.140";
+    private static final String TEST_HOST_IP_DOGFOOD = "10.113.63.59";
     private static final String TEST_HOST_CATFOOD    = "catfood.zimbra.com";
-    private static final String TEST_HOST_IP_CATFOOD = "10.113.63.60"; // "207.126.229.141";
+    private static final String TEST_HOST_IP_CATFOOD = "10.113.63.60";
 
     private static final String IMAP_EXTERNAL_HOST = TEST_HOST_DOGFOOD;
     private static final String IMAP_EXTERNAL_HOST_IP = TEST_HOST_IP_DOGFOOD;
@@ -135,7 +127,15 @@ public class TestNginxLookup extends TestCase {
     private static String ACCT_FOREIGN_PRINCIPAL;
     private static String ACCT2_FOREIGN_PRINCIPAL;
 
-    private Account acct, acct1, acct2;
+    Account acct;
+
+    /** References to accounts created during a test, which need to be deleted during teardown */
+    private Set<Account> accountsToCleanup = new HashSet<>();
+
+    /** Reference to a domain created during a test, which needs to be deleted during teardown */
+    private Set<Domain> domainsToCleanup = new HashSet<>();
+
+    private String localHostName, localHostAddress;
 
     public static class Result {
         public Result(String status, String server, String port, String user, String wait, String password) {
@@ -187,10 +187,17 @@ public class TestNginxLookup extends TestCase {
 
     @Override
     public void setUp() throws Exception {
-        CliUtil.toolSetup();
         mSoapProv = new SoapProvisioning();
         mSoapProv.soapSetURI("https://localhost:7071" + AdminConstants.ADMIN_SERVICE_URI);
         mSoapProv.soapZimbraAdminAuthenticate();
+
+        // All the tests by default don't depend on DNS lookups
+        Map<String, Object> attrs = new HashMap<String, Object>();
+        attrs.put(Provisioning.A_zimbraReverseProxyDnsLookupInServerEnabled, ProvisioningConstants.FALSE);
+        mSoapProv.getLocalServer().modify(attrs);
+
+        localHostName = InetAddress.getLocalHost().getHostName().toLowerCase();
+        localHostAddress = InetAddress.getLocalHost().getHostAddress();
 
         TEST_ID = TestProvisioningUtil.genTestId();
         DOMAIN = TestProvisioningUtil.baseDomainName(TEST_NAME, TEST_ID);
@@ -211,6 +218,7 @@ public class TestNginxLookup extends TestCase {
         domainAttrs.put(Provisioning.A_zimbraVirtualIPAddress, DOMAIN_VIRTUAL_IP);
         Domain domain = mSoapProv.createDomain(DOMAIN, domainAttrs);
         Assert.assertNotNull(domain);
+        domainsToCleanup.add(domain);
 
         // create the test account
         ACCT_FOREIGN_PRINCIPAL = FOREIGN_ID + "@" + DOMAIN;
@@ -218,16 +226,18 @@ public class TestNginxLookup extends TestCase {
         acctAttrs.put(Provisioning.A_zimbraForeignPrincipal, ACCT_FOREIGN_PRINCIPAL);
         acct = mSoapProv.createAccount(ACCT_EMAIL, PASSWORD, acctAttrs);
         Assert.assertNotNull(acct);
+        accountsToCleanup.add(acct);
 
         /*
          * ACCT1: account in the default domain with the same local part as ACCT, no foreign principal
          *
          * create ACCT1 if it does not exist yet
          */
-        acct1 = mSoapProv.get(AccountBy.name, ACCT1_EMAIL);
+        Account acct1 = mSoapProv.get(AccountBy.name, ACCT1_EMAIL);
         if (acct1 == null) {
             acct1 = mSoapProv.createAccount(ACCT1_EMAIL, PASSWORD, null);
             Assert.assertNotNull(acct1);
+            accountsToCleanup.add(acct1);
         }
 
         // setup external route for the account
@@ -237,23 +247,28 @@ public class TestNginxLookup extends TestCase {
         acctAttrs.clear();
         ACCT2_FOREIGN_PRINCIPAL = FOREIGN_ID + "@" +SYSTEM_DEFAULT_DOMAIN;
         acctAttrs.put(Provisioning.A_zimbraForeignPrincipal, ACCT2_FOREIGN_PRINCIPAL);
-        acct2 = mSoapProv.get(AccountBy.name, ACCT2_EMAIL);
+        Account acct2 = mSoapProv.get(AccountBy.name, ACCT2_EMAIL);
         if (acct2 == null) {
             acct2 = mSoapProv.createAccount(ACCT2_EMAIL, PASSWORD, acctAttrs);
             Assert.assertNotNull(acct2);
         } else {
             mSoapProv.modifyAttrs(acct2, acctAttrs);
         }
+        accountsToCleanup.add(acct2);
     }
 
     @Override
     public void tearDown() throws Exception {
-        DOMAIN = TestProvisioningUtil.baseDomainName(TEST_NAME, TEST_ID);
-        mSoapProv.deleteAccount(acct1.getId());
-        TestLdap.deleteEntireBranch(DOMAIN);
-        DOMAIN = null;
-        TEST_ID = null;
-        ((NginxLookupExtension)ExtensionUtil.getExtension(NginxLookupExtension.NAME)).clearCache();
+        for (Account acct: accountsToCleanup) {
+            try {
+                mSoapProv.deleteAccount(acct.getId());
+            } catch (Exception e) {}
+        }
+        for (Domain domain: domainsToCleanup) {
+            try {
+                TestLdap.deleteEntireBranch(domain.getName());
+            } catch (Exception e) {}
+        }
     }
 
     // revert reverse proxy config to defaults
@@ -262,7 +277,6 @@ public class TestNginxLookup extends TestCase {
         attrs.put(Provisioning.A_zimbraReverseProxyUserNameAttribute, "");
         attrs.put(Provisioning.A_zimbraReverseProxyMailHostQuery, "(|(zimbraMailDeliveryAddress=${USER})(zimbraMailAlias=${USER})(zimbraId=${USER}))");
         modifyConfig(attrs);
-        ((NginxLookupExtension)ExtensionUtil.getExtension(NginxLookupExtension.NAME)).clearCache();
     }
 
     private void setupLookupByForeignPrincipal() throws Exception {
@@ -270,7 +284,6 @@ public class TestNginxLookup extends TestCase {
         attrs.put(Provisioning.A_zimbraReverseProxyUserNameAttribute, "zimbraMailDeliveryAddress");
         attrs.put(Provisioning.A_zimbraReverseProxyMailHostQuery, "(zimbraForeignPrincipal=${USER})");
         modifyConfig(attrs);
-        ((NginxLookupExtension)ExtensionUtil.getExtension(NginxLookupExtension.NAME)).clearCache();
     }
 
     private void unsetAccountExternalRouteFlag(String acctEmail) throws Exception {
@@ -279,7 +292,6 @@ public class TestNginxLookup extends TestCase {
         Map<String, Object> attrs = new HashMap<String, Object>();
         attrs.put(Provisioning.A_zimbraReverseProxyUseExternalRoute, "");
         mSoapProv.modifyAttrs(acct, attrs);
-        ((NginxLookupExtension)ExtensionUtil.getExtension(NginxLookupExtension.NAME)).clearCache();
     }
 
     private void setAccountExternalRouteFlag(String acctEmail) throws Exception {
@@ -288,7 +300,6 @@ public class TestNginxLookup extends TestCase {
         Map<String, Object> attrs = new HashMap<String, Object>();
         attrs.put(Provisioning.A_zimbraReverseProxyUseExternalRoute, "TRUE");
         mSoapProv.modifyAttrs(acct, attrs);
-        ((NginxLookupExtension)ExtensionUtil.getExtension(NginxLookupExtension.NAME)).clearCache();
     }
 
     private static void setupAccountExternalRoute(Account acct) throws Exception {
@@ -303,19 +314,18 @@ public class TestNginxLookup extends TestCase {
         attrs.put(Provisioning.A_zimbraExternalImapHostname, IMAP_EXTERNAL_HOST);
         attrs.put(Provisioning.A_zimbraExternalImapSSLHostname, IMAP_SSL_EXTERNAL_HOST);
         mSoapProv.modifyAttrs(acct, attrs);
-        ((NginxLookupExtension)ExtensionUtil.getExtension(NginxLookupExtension.NAME)).clearCache();
     }
 
     @Test
     public void testFullEmail() throws Exception {
         unsetAccountExternalRouteFlag(ACCT_EMAIL);
-        doTest(ACCT_EMAIL, PASSWORD, null, "imap").verify(STATUS_OK, InetAddress.getLocalHost().getHostAddress(), IMAP_PORT, null, null);
-        doTest(ACCT_EMAIL, PASSWORD, null, "pop3").verify(STATUS_OK, InetAddress.getLocalHost().getHostAddress(), POP3_PORT, null, null);
+        doTest(ACCT_EMAIL, PASSWORD, null, "imap").verify(STATUS_OK, localHostName, IMAP_PORT, null, null);
+        doTest(ACCT_EMAIL, PASSWORD, null, "pop3").verify(STATUS_OK, localHostName, POP3_PORT, null, null);
 
         setAccountExternalRouteFlag(ACCT_EMAIL);
         setupAccountExternalRoute(acct);
-        doTest(ACCT_EMAIL, PASSWORD, null, "imap").verify(STATUS_OK, IMAP_EXTERNAL_HOST_IP, IMAP_EXTERNAL_PORT, null, null);
-        doTest(ACCT_EMAIL, PASSWORD, null, "pop3").verify(STATUS_OK, POP3_EXTERNAL_HOST_IP, POP3_EXTERNAL_PORT, null, null);
+        doTest(ACCT_EMAIL, PASSWORD, null, "imap").verify(STATUS_OK, IMAP_EXTERNAL_HOST, IMAP_EXTERNAL_PORT, null, null);
+        doTest(ACCT_EMAIL, PASSWORD, null, "pop3").verify(STATUS_OK, POP3_EXTERNAL_HOST, POP3_EXTERNAL_PORT, null, null);
     }
 
     /*
@@ -324,12 +334,12 @@ public class TestNginxLookup extends TestCase {
     @Test
     public void testVirtualDomainByProxyIP() throws Exception {
         unsetAccountExternalRouteFlag(ACCT_EMAIL);
-        doTest(ACCT_LOCALPART, PASSWORD, DOMAIN_VIRTUAL_IP, "imap").verify(STATUS_OK, IMAP_HOST_IP, IMAP_PORT, ACCT_EMAIL, null);
-        doTest(ACCT_LOCALPART, PASSWORD, DOMAIN_VIRTUAL_IP, "pop3").verify(STATUS_OK, POP3_HOST_IP, POP3_PORT, ACCT_EMAIL, null);
+        doTest(ACCT_LOCALPART, PASSWORD, DOMAIN_VIRTUAL_IP, "imap").verify(STATUS_OK, localHostName, IMAP_PORT, ACCT_EMAIL, null);
+        doTest(ACCT_LOCALPART, PASSWORD, DOMAIN_VIRTUAL_IP, "pop3").verify(STATUS_OK, localHostName, POP3_PORT, ACCT_EMAIL, null);
 
         setAccountExternalRouteFlag(ACCT_EMAIL);
-        doTest(ACCT_LOCALPART, PASSWORD, DOMAIN_VIRTUAL_IP, "imap").verify(STATUS_OK, IMAP_EXTERNAL_HOST_IP, IMAP_EXTERNAL_PORT, ACCT_EMAIL, null);
-        doTest(ACCT_LOCALPART, PASSWORD, DOMAIN_VIRTUAL_IP, "pop3").verify(STATUS_OK, POP3_EXTERNAL_HOST_IP, POP3_EXTERNAL_PORT, ACCT_EMAIL, null);
+        doTest(ACCT_LOCALPART, PASSWORD, DOMAIN_VIRTUAL_IP, "imap").verify(STATUS_OK, IMAP_EXTERNAL_HOST, IMAP_EXTERNAL_PORT, ACCT_EMAIL, null);
+        doTest(ACCT_LOCALPART, PASSWORD, DOMAIN_VIRTUAL_IP, "pop3").verify(STATUS_OK, POP3_EXTERNAL_HOST, POP3_EXTERNAL_PORT, ACCT_EMAIL, null);
     }
 
     /*
@@ -337,8 +347,8 @@ public class TestNginxLookup extends TestCase {
      */
     @Test
     public void testVirtualDomainWrongProxyIP() throws Exception {
-        doTest(ACCT_LOCALPART, PASSWORD, "127.0.0.2", "imap").verify(STATUS_OK, IMAP_HOST_IP, IMAP_PORT, ACCT1_EMAIL, null);
-        doTest(ACCT_LOCALPART, PASSWORD, "127.0.0.2", "pop3").verify(STATUS_OK, POP3_HOST_IP, POP3_PORT, ACCT1_EMAIL, null);
+        doTest(ACCT_LOCALPART, PASSWORD, "127.0.0.2", "imap").verify(STATUS_OK, localHostName, IMAP_PORT, ACCT1_EMAIL, null);
+        doTest(ACCT_LOCALPART, PASSWORD, "127.0.0.2", "pop3").verify(STATUS_OK, localHostName, POP3_PORT, ACCT1_EMAIL, null);
     }
 
     /*
@@ -346,8 +356,8 @@ public class TestNginxLookup extends TestCase {
      */
     @Test
     public void testVirtualDomainNoProxyIP() throws Exception {
-        doTest(ACCT_LOCALPART, PASSWORD, null, "imap").verify(STATUS_OK, IMAP_HOST_IP, IMAP_PORT, ACCT1_EMAIL, null);
-        doTest(ACCT_LOCALPART, PASSWORD, null, "pop3").verify(STATUS_OK, POP3_HOST_IP, POP3_PORT, ACCT1_EMAIL, null);
+        doTest(ACCT_LOCALPART, PASSWORD, null, "imap").verify(STATUS_OK, localHostName, IMAP_PORT, ACCT1_EMAIL, null);
+        doTest(ACCT_LOCALPART, PASSWORD, null, "pop3").verify(STATUS_OK, localHostName, POP3_PORT, ACCT1_EMAIL, null);
     }
 
 
@@ -366,6 +376,7 @@ public class TestNginxLookup extends TestCase {
             attrs.put(Provisioning.A_zimbraExternalImapSSLHostname, IMAP_SSL_EXTERNAL_HOST_ON_DOMAIN);
 
             domain = mSoapProv.createDomain(domainName, attrs);
+            domainsToCleanup.add(domain);
         }
         Assert.assertNotNull(domain);
         return domain;
@@ -378,18 +389,18 @@ public class TestNginxLookup extends TestCase {
 
         String acctEmail = "user1@" + domainName;
         Account acct = mSoapProv.createAccount(acctEmail, PASSWORD, null);
+        accountsToCleanup.add(acct);
 
         setAccountExternalRouteFlag(acctEmail);
         setupAccountExternalRoute(acct);
 
-        doTest(acctEmail, PASSWORD, null, "imap").verify(STATUS_OK, IMAP_EXTERNAL_HOST_IP, IMAP_EXTERNAL_PORT, null, null);
-        doTest(acctEmail, PASSWORD, null, "pop3").verify(STATUS_OK, POP3_EXTERNAL_HOST_IP, POP3_EXTERNAL_PORT, null, null);
-        doTest(acctEmail, PASSWORD, null, "imapssl").verify(STATUS_OK, IMAP_SSL_EXTERNAL_HOST_IP, IMAP_SSL_EXTERNAL_PORT, null, null);
-        doTest(acctEmail, PASSWORD, null, "pop3ssl").verify(STATUS_OK, POP3_SSL_EXTERNAL_HOST_IP, POP3_SSL_EXTERNAL_PORT, null, null);
+        doTest(acctEmail, PASSWORD, null, "imap").verify(STATUS_OK, IMAP_EXTERNAL_HOST, IMAP_EXTERNAL_PORT, null, null);
+        doTest(acctEmail, PASSWORD, null, "pop3").verify(STATUS_OK, POP3_EXTERNAL_HOST, POP3_EXTERNAL_PORT, null, null);
+        doTest(acctEmail, PASSWORD, null, "imapssl").verify(STATUS_OK, IMAP_SSL_EXTERNAL_HOST, IMAP_SSL_EXTERNAL_PORT, null, null);
+        doTest(acctEmail, PASSWORD, null, "pop3ssl").verify(STATUS_OK, POP3_SSL_EXTERNAL_HOST, POP3_SSL_EXTERNAL_PORT, null, null);
 
         // external route only applies to pop3/imap, not http
-        doTest(acctEmail, PASSWORD, null, "http").verify(STATUS_OK, InetAddress.getLocalHost().getHostAddress(), HTTP_PORT, null, null);
-
+        doTest(acctEmail, PASSWORD, null, "http").verify(STATUS_OK, localHostName, HTTP_PORT, null, null);
     }
 
     @Test
@@ -399,16 +410,17 @@ public class TestNginxLookup extends TestCase {
 
         String acctEmail = "user2@" + domainName;
         Account acct = mSoapProv.createAccount(acctEmail, PASSWORD, null);
+        accountsToCleanup.add(acct);
 
         setAccountExternalRouteFlag(acctEmail);
 
-        doTest(acctEmail, PASSWORD, null, "imap").verify(STATUS_OK, IMAP_EXTERNAL_HOST_IP_ON_DOMAIN, IMAP_EXTERNAL_PORT_ON_DOMAIN, null, null);
-        doTest(acctEmail, PASSWORD, null, "pop3").verify(STATUS_OK, POP3_EXTERNAL_HOST_IP_ON_DOMAIN, POP3_EXTERNAL_PORT_ON_DOMAIN, null, null);
-        doTest(acctEmail, PASSWORD, null, "imapssl").verify(STATUS_OK, IMAP_SSL_EXTERNAL_HOST_IP_ON_DOMAIN, IMAP_SSL_EXTERNAL_PORT_ON_DOMAIN, null, null);
-        doTest(acctEmail, PASSWORD, null, "pop3ssl").verify(STATUS_OK, POP3_SSL_EXTERNAL_HOST_IP_ON_DOMAIN, POP3_SSL_EXTERNAL_PORT_ON_DOMAIN, null, null);
+        doTest(acctEmail, PASSWORD, null, "imap").verify(STATUS_OK, IMAP_EXTERNAL_HOST_ON_DOMAIN, IMAP_EXTERNAL_PORT_ON_DOMAIN, null, null);
+        doTest(acctEmail, PASSWORD, null, "pop3").verify(STATUS_OK, POP3_EXTERNAL_HOST_ON_DOMAIN, POP3_EXTERNAL_PORT_ON_DOMAIN, null, null);
+        doTest(acctEmail, PASSWORD, null, "imapssl").verify(STATUS_OK, IMAP_SSL_EXTERNAL_HOST_ON_DOMAIN, IMAP_SSL_EXTERNAL_PORT_ON_DOMAIN, null, null);
+        doTest(acctEmail, PASSWORD, null, "pop3ssl").verify(STATUS_OK, POP3_SSL_EXTERNAL_HOST_ON_DOMAIN, POP3_SSL_EXTERNAL_PORT_ON_DOMAIN, null, null);
 
         // external route only applies to pop3/imap, not http
-        doTest(acctEmail, PASSWORD, null, "http").verify(STATUS_OK, InetAddress.getLocalHost().getHostAddress(), HTTP_PORT, null, null);
+        doTest(acctEmail, PASSWORD, null, "http").verify(STATUS_OK, localHostName, HTTP_PORT, null, null);
 
         // set partial external route on account, should still fallback to the domain external route
         // settings, because the setting on account is not complete.
@@ -419,27 +431,29 @@ public class TestNginxLookup extends TestCase {
         attrs.put(Provisioning.A_zimbraExternalImapSSLHostname, IMAP_SSL_EXTERNAL_HOST_ON_DOMAIN);
         mSoapProv.modifyAttrs(acct, attrs);
 
-        doTest(acctEmail, PASSWORD, null, "imap").verify(STATUS_OK, IMAP_EXTERNAL_HOST_IP_ON_DOMAIN, IMAP_EXTERNAL_PORT_ON_DOMAIN, null, null);
-        doTest(acctEmail, PASSWORD, null, "pop3").verify(STATUS_OK, POP3_EXTERNAL_HOST_IP_ON_DOMAIN, POP3_EXTERNAL_PORT_ON_DOMAIN, null, null);
-        doTest(acctEmail, PASSWORD, null, "imapssl").verify(STATUS_OK, IMAP_SSL_EXTERNAL_HOST_IP_ON_DOMAIN, IMAP_SSL_EXTERNAL_PORT_ON_DOMAIN, null, null);
-        doTest(acctEmail, PASSWORD, null, "pop3ssl").verify(STATUS_OK, POP3_SSL_EXTERNAL_HOST_IP_ON_DOMAIN, POP3_SSL_EXTERNAL_PORT_ON_DOMAIN, null, null);
+        doTest(acctEmail, PASSWORD, null, "imap").verify(STATUS_OK, IMAP_EXTERNAL_HOST_ON_DOMAIN, IMAP_EXTERNAL_PORT_ON_DOMAIN, null, null);
+        doTest(acctEmail, PASSWORD, null, "pop3").verify(STATUS_OK, POP3_EXTERNAL_HOST_ON_DOMAIN, POP3_EXTERNAL_PORT_ON_DOMAIN, null, null);
+        doTest(acctEmail, PASSWORD, null, "imapssl").verify(STATUS_OK, IMAP_SSL_EXTERNAL_HOST_ON_DOMAIN, IMAP_SSL_EXTERNAL_PORT_ON_DOMAIN, null, null);
+        doTest(acctEmail, PASSWORD, null, "pop3ssl").verify(STATUS_OK, POP3_SSL_EXTERNAL_HOST_ON_DOMAIN, POP3_SSL_EXTERNAL_PORT_ON_DOMAIN, null, null);
     }
 
     @Test
     public void testExternalRouteMissingExternalRouteInfo() throws Exception {
         String domainName = "external-route-missing-info." + DOMAIN;
         Domain domain = mSoapProv.createDomain(domainName, null);  // create the domain with no external route info
+        domainsToCleanup.add(domain);
 
         String acctEmail = "user@" + domainName;
         Account acct = mSoapProv.createAccount(acctEmail, PASSWORD, null);  // create the account with no external route info
+        accountsToCleanup.add(acct);
 
         setAccountExternalRouteFlag(acctEmail);  // turn on the use external route flag on account
 
         // should all fallback to internal route
-        doTest(acctEmail, PASSWORD, null, "imap").verify(STATUS_OK, IMAP_HOST_IP, IMAP_PORT, null, null);
-        doTest(acctEmail, PASSWORD, null, "pop3").verify(STATUS_OK, POP3_HOST_IP, POP3_PORT, null, null);
-        doTest(acctEmail, PASSWORD, null, "imapssl").verify(STATUS_OK, IMAP_SSL_HOST_IP, IMAP_SSL_PORT, null, null);
-        doTest(acctEmail, PASSWORD, null, "pop3ssl").verify(STATUS_OK, POP3_SSL_HOST_IP, POP3_SSL_PORT, null, null);
+        doTest(acctEmail, PASSWORD, null, "imap").verify(STATUS_OK, localHostName, IMAP_PORT, null, null);
+        doTest(acctEmail, PASSWORD, null, "pop3").verify(STATUS_OK, localHostName, POP3_PORT, null, null);
+        doTest(acctEmail, PASSWORD, null, "imapssl").verify(STATUS_OK, localHostName, IMAP_SSL_PORT, null, null);
+        doTest(acctEmail, PASSWORD, null, "pop3ssl").verify(STATUS_OK, localHostName, POP3_SSL_PORT, null, null);
     }
 
     /*
@@ -449,21 +463,21 @@ public class TestNginxLookup extends TestCase {
     */
     @Test
     @Ignore
-    public void testSupportedExtensionFullEmail() throws Exception {
-        doTest(ACCT_EMAIL+"/tb", PASSWORD, DOMAIN_VIRTUAL_IP, "imap").verify(STATUS_OK, IMAP_HOST_IP, IMAP_PORT, null, null);
-        doTest(ACCT_EMAIL+"/tb", PASSWORD, DOMAIN_VIRTUAL_IP, "pop3").verify(STATUS_OK, POP3_HOST_IP, POP3_PORT, null, null);
+    public void _testSupportedExtensionFullEmail() throws Exception {
+        doTest(ACCT_EMAIL+"/tb", PASSWORD, DOMAIN_VIRTUAL_IP, "imap").verify(STATUS_OK, localHostName, IMAP_PORT, null, null);
+        doTest(ACCT_EMAIL+"/tb", PASSWORD, DOMAIN_VIRTUAL_IP, "pop3").verify(STATUS_OK, localHostName, POP3_PORT, null, null);
     }
 
     @Test
     @Ignore
-    public void testSupportedExtensionVirtualDomain() throws Exception {
-        doTest(ACCT_LOCALPART+"/tb", PASSWORD, DOMAIN_VIRTUAL_IP, "imap").verify(STATUS_OK, IMAP_HOST_IP, IMAP_PORT, ACCT_EMAIL+"/tb", null);
-        doTest(ACCT_LOCALPART+"/tb", PASSWORD, DOMAIN_VIRTUAL_IP, "pop3").verify(STATUS_OK, POP3_HOST_IP, POP3_PORT, ACCT_EMAIL+"/tb", null);
+    public void _testSupportedExtensionVirtualDomain() throws Exception {
+        doTest(ACCT_LOCALPART+"/tb", PASSWORD, DOMAIN_VIRTUAL_IP, "imap").verify(STATUS_OK, localHostName, IMAP_PORT, ACCT_EMAIL+"/tb", null);
+        doTest(ACCT_LOCALPART+"/tb", PASSWORD, DOMAIN_VIRTUAL_IP, "pop3").verify(STATUS_OK, localHostName, POP3_PORT, ACCT_EMAIL+"/tb", null);
     }
 
     @Test
     @Ignore
-    public void testUnsupportedExtension() throws Exception {
+    public void _testUnsupportedExtension() throws Exception {
         doTest(ACCT_LOCALPART + "/zz", PASSWORD, DOMAIN_VIRTUAL_IP, "imap").verify(STATUS_LOGIN_FAILED, null, null, null, AUTH_WAIT);
         doTest(ACCT_LOCALPART + "/zz", PASSWORD, DOMAIN_VIRTUAL_IP, "pop3").verify(STATUS_LOGIN_FAILED, null, null, null, AUTH_WAIT);
     }
@@ -474,17 +488,17 @@ public class TestNginxLookup extends TestCase {
         unsetAccountExternalRouteFlag(ACCT_EMAIL);
 
         // full email
-        doTest(ACCT_FOREIGN_PRINCIPAL, PASSWORD, null, "imap").verify(STATUS_OK, IMAP_HOST_IP, IMAP_PORT, ACCT_EMAIL, null);
-        doTest(ACCT_FOREIGN_PRINCIPAL, PASSWORD, null, "pop3").verify(STATUS_OK, POP3_HOST_IP, POP3_PORT, ACCT_EMAIL, null);
+        doTest(ACCT_FOREIGN_PRINCIPAL, PASSWORD, null, "imap").verify(STATUS_OK, localHostName, IMAP_PORT, ACCT_EMAIL, null);
+        doTest(ACCT_FOREIGN_PRINCIPAL, PASSWORD, null, "pop3").verify(STATUS_OK, localHostName, POP3_PORT, ACCT_EMAIL, null);
 
         setAccountExternalRouteFlag(ACCT_EMAIL);
-        doTest(ACCT_FOREIGN_PRINCIPAL, PASSWORD, null, "imap").verify(STATUS_OK, IMAP_EXTERNAL_HOST_IP, IMAP_EXTERNAL_PORT, ACCT_EMAIL, null);
-        doTest(ACCT_FOREIGN_PRINCIPAL, PASSWORD, null, "pop3").verify(STATUS_OK, POP3_EXTERNAL_HOST_IP, POP3_EXTERNAL_PORT, ACCT_EMAIL, null);
+        doTest(ACCT_FOREIGN_PRINCIPAL, PASSWORD, null, "imap").verify(STATUS_OK, IMAP_EXTERNAL_HOST, IMAP_EXTERNAL_PORT, ACCT_EMAIL, null);
+        doTest(ACCT_FOREIGN_PRINCIPAL, PASSWORD, null, "pop3").verify(STATUS_OK, POP3_EXTERNAL_HOST, POP3_EXTERNAL_PORT, ACCT_EMAIL, null);
 
         /*
         // full email with supported extension
-        doTest(ACCT_FOREIGN_PRINCIPAL+"/tb", PASSWORD, null, "imap").verify(STATUS_OK, IMAP_HOST_IP, IMAP_PORT, ACCT_EMAIL+"/tb", null);
-        doTest(ACCT_FOREIGN_PRINCIPAL+"/tb", PASSWORD, null, "pop3").verify(STATUS_OK, POP3_HOST_IP, POP3_PORT, ACCT_EMAIL+"/tb", null);
+        doTest(ACCT_FOREIGN_PRINCIPAL+"/tb", PASSWORD, null, "imap").verify(STATUS_OK, localHostName, IMAP_PORT, ACCT_EMAIL+"/tb", null);
+        doTest(ACCT_FOREIGN_PRINCIPAL+"/tb", PASSWORD, null, "pop3").verify(STATUS_OK, localHostName, POP3_PORT, ACCT_EMAIL+"/tb", null);
 
         // full email with unsupported extension
         doTest(ACCT_FOREIGN_PRINCIPAL+"/zz", PASSWORD, null, "imap").verify(STATUS_LOGIN_FAILED, null, null, null, AUTH_WAIT);
@@ -501,16 +515,16 @@ public class TestNginxLookup extends TestCase {
         unsetAccountExternalRouteFlag(ACCT_EMAIL);
 
         // virtual domain by proxy IP
-        doTest(FOREIGN_ID, PASSWORD, DOMAIN_VIRTUAL_IP, "imap").verify(STATUS_OK, IMAP_HOST_IP, IMAP_PORT, ACCT_EMAIL, null);
-        doTest(FOREIGN_ID, PASSWORD, DOMAIN_VIRTUAL_IP, "pop3").verify(STATUS_OK, POP3_HOST_IP, POP3_PORT, ACCT_EMAIL, null);
+        doTest(FOREIGN_ID, PASSWORD, DOMAIN_VIRTUAL_IP, "imap").verify(STATUS_OK, localHostName, IMAP_PORT, ACCT_EMAIL, null);
+        doTest(FOREIGN_ID, PASSWORD, DOMAIN_VIRTUAL_IP, "pop3").verify(STATUS_OK, localHostName, POP3_PORT, ACCT_EMAIL, null);
 
         setAccountExternalRouteFlag(ACCT_EMAIL);
-        doTest(FOREIGN_ID, PASSWORD, DOMAIN_VIRTUAL_IP, "imap").verify(STATUS_OK, IMAP_EXTERNAL_HOST_IP, IMAP_EXTERNAL_PORT, ACCT_EMAIL, null);
-        doTest(FOREIGN_ID, PASSWORD, DOMAIN_VIRTUAL_IP, "pop3").verify(STATUS_OK, POP3_EXTERNAL_HOST_IP, POP3_EXTERNAL_PORT, ACCT_EMAIL, null);
+        doTest(FOREIGN_ID, PASSWORD, DOMAIN_VIRTUAL_IP, "imap").verify(STATUS_OK, IMAP_EXTERNAL_HOST, IMAP_EXTERNAL_PORT, ACCT_EMAIL, null);
+        doTest(FOREIGN_ID, PASSWORD, DOMAIN_VIRTUAL_IP, "pop3").verify(STATUS_OK, POP3_EXTERNAL_HOST, POP3_EXTERNAL_PORT, ACCT_EMAIL, null);
 
         // virtual domain wrong proxy IP, the foreign id + default domain exists
-        doTest(FOREIGN_ID, PASSWORD, "127.0.0.2", "imap").verify(STATUS_OK, IMAP_HOST_IP, IMAP_PORT, ACCT2_EMAIL, null);
-        doTest(FOREIGN_ID, PASSWORD, "127.0.0.2", "pop3").verify(STATUS_OK, POP3_HOST_IP, POP3_PORT, ACCT2_EMAIL, null);
+        doTest(FOREIGN_ID, PASSWORD, "127.0.0.2", "imap").verify(STATUS_OK, localHostName, IMAP_PORT, ACCT2_EMAIL, null);
+        doTest(FOREIGN_ID, PASSWORD, "127.0.0.2", "pop3").verify(STATUS_OK, localHostName, POP3_PORT, ACCT2_EMAIL, null);
 
         // virtual domain wrong proxy IP, the foreign id + default domain does not exist
         /*
@@ -522,13 +536,13 @@ public class TestNginxLookup extends TestCase {
         doTest(FOREIGN_ID+"wrong", PASSWORD, "127.0.0.2", "pop3").verify(expectedStatus, null, null, null, AUTH_WAIT);
 
         // virtual domain no proxy IP
-        doTest(FOREIGN_ID, PASSWORD, null, "imap").verify(STATUS_OK, IMAP_HOST_IP, IMAP_PORT, ACCT2_EMAIL, null);
-        doTest(FOREIGN_ID, PASSWORD, null, "pop3").verify(STATUS_OK, POP3_HOST_IP, POP3_PORT, ACCT2_EMAIL, null);
+        doTest(FOREIGN_ID, PASSWORD, null, "imap").verify(STATUS_OK, localHostName, IMAP_PORT, ACCT2_EMAIL, null);
+        doTest(FOREIGN_ID, PASSWORD, null, "pop3").verify(STATUS_OK, localHostName, POP3_PORT, ACCT2_EMAIL, null);
 
         /*
         // virtual domain with supported extension
-        doTest(FOREIGN_ID+"/tb", PASSWORD, DOMAIN_VIRTUAL_IP, "imap").verify(STATUS_OK, IMAP_HOST_IP, IMAP_PORT, ACCT_EMAIL+"/tb", null);
-        doTest(FOREIGN_ID+"/tb", PASSWORD, DOMAIN_VIRTUAL_IP, "pop3").verify(STATUS_OK, POP3_HOST_IP, POP3_PORT, ACCT_EMAIL+"/tb", null);
+        doTest(FOREIGN_ID+"/tb", PASSWORD, DOMAIN_VIRTUAL_IP, "imap").verify(STATUS_OK, localHostName, IMAP_PORT, ACCT_EMAIL+"/tb", null);
+        doTest(FOREIGN_ID+"/tb", PASSWORD, DOMAIN_VIRTUAL_IP, "pop3").verify(STATUS_OK, localHostName, POP3_PORT, ACCT_EMAIL+"/tb", null);
 
         // virtual domain with unsupported extension
         doTest(FOREIGN_ID+"/zz", PASSWORD, DOMAIN_VIRTUAL_IP, "imap").verify(STATUS_LOGIN_FAILED, null, null, null, AUTH_WAIT);
@@ -602,11 +616,11 @@ public class TestNginxLookup extends TestCase {
 
 
         doTest("gssapi",  acctLocalPart,      null,  "imap",  "1",  clientIp,  nginxServerIp,  null,  acctKrb5Principal,  adminAcct,  adminPassword).
-                verify(STATUS_OK, IMAP_HOST_IP, IMAP_PORT, acctEmail, null);
+                verify(STATUS_OK, localHostName, IMAP_PORT, acctEmail, null);
         doTest("gssapi",  acctEmail,          null,  "imap",  "1",  clientIp,  nginxServerIp,  null,  acctKrb5Principal,  adminAcct,  adminPassword).
-                verify(STATUS_OK, IMAP_HOST_IP, IMAP_PORT, acctEmail, null);
+                verify(STATUS_OK, localHostName, IMAP_PORT, acctEmail, null);
         doTest("gssapi",  acctKrb5Principal,  null,  "imap",  "1",  clientIp,  nginxServerIp,  null,  acctKrb5Principal,  adminAcct,  adminPassword).
-                verify(STATUS_OK, IMAP_HOST_IP, IMAP_PORT, acctEmail, null);
+                verify(STATUS_OK, localHostName, IMAP_PORT, acctEmail, null);
 
         /*
          * behavior changed after p4 change 334496, it is correct?
@@ -628,7 +642,7 @@ public class TestNginxLookup extends TestCase {
                 verify(expectedStatus, null, null, null, AUTH_WAIT);
 
         doTest("gssapi",  childLocalPart,     null,  "imap",  "1",  clientIp,  nginxServerIp,  null,  parentKrb5Principal,  adminAcct,  adminPassword).
-                verify(STATUS_OK, IMAP_HOST_IP, IMAP_PORT, childEmail, null);
+                verify(STATUS_OK, localHostName, IMAP_PORT, childEmail, null);
 
         // cleanup setting on global config
         attrs.clear();
@@ -655,11 +669,15 @@ public class TestNginxLookup extends TestCase {
         attrs.put(Provisioning.A_zimbraReverseProxyAdminIPAddress, nginxServerIp);
         mSoapProv.modifyAttrs(config, attrs);
 
-        String acctEmail = "user1@phoebe.mbp";
-        String x509SubjectDN = "EMAILADDRESS=user1@phoebe.mbp,CN=user one,OU=Engineering,O=Example Company,L=Saratoga,ST=California,C=US";  // TODO, do not hardcode
+        // create test accounts
+        String acctEmail = "user7@phoebe.mbp";
+        Account acct = mSoapProv.createAccount(acctEmail, PASSWORD, null);
+        accountsToCleanup.add(acct);
 
+        // Test
+        String x509SubjectDN = "EMAILADDRESS=user7@phoebe.mbp,CN=user one,OU=Engineering,O=Example Company,L=Saratoga,ST=California,C=US";  // TODO, do not hardcode
         doTest("certauth", x509SubjectDN, null,  "http",  "1",  clientIp,  nginxServerIp,  null,  null,  adminAcct,  adminPassword).
-                verify(STATUS_OK, InetAddress.getLocalHost().getHostAddress(), HTTP_PORT, acctEmail, null, true);
+                verify(STATUS_OK, "127.0.0.1", "9999", acctEmail, null, true);
 
         // cleanup setting on global config
         attrs.clear();
@@ -765,11 +783,4 @@ public class TestNginxLookup extends TestCase {
     private static String simulateNginxDecodeUser(String in) {
         return in.replaceAll("%25", "%").replaceAll("%20", " ");
     }
-
-
-    /*
-    public static void main(String args[]) {
-        TestUtil.runTest(TestNginxLookup.class);
-    }
-    */
 }
