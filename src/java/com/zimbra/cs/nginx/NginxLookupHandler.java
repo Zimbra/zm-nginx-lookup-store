@@ -5,11 +5,15 @@ import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+
+import org.apache.commons.net.util.SubnetUtils;
+import org.apache.commons.net.util.SubnetUtils.SubnetInfo;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -75,6 +79,7 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
 
         /* Generic Error Message for failure */
         public static final String ERRMSG = "login failed";
+        public static final String ACCESS_DENIED_ERRMSG = "is not allowed on this domain";
 
         /* protocols */
         public static final String POP3     = "pop3";
@@ -774,6 +779,37 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                     verifyAccountAdmin(authUser, req.authMethod);
                 }
 
+                // Check if the client IP matches one of the IPs in zimbraReverseProxyDomainAllowedIPs
+                Account acct = null;
+                if (req.authMethod.compareToIgnoreCase(AUTHMETH_ZIMBRAID) == 0) {
+                    acct = prov.get(AccountBy.id, authUser);
+                } else {
+                    acct = prov.get(AccountBy.name, authUser);
+                }
+                Domain userdomain = prov.getDomain(acct);
+                if (userdomain == null)
+                    throw new EntryNotFoundException("domain not found for user:" + authUser);
+                String[] DomainAllowedIPs = userdomain
+                     .getMultiAttr(Provisioning.A_zimbraDomainAllowedIPs);
+                ZimbraLog.nginxlookup.debug("Domain name is " + userdomain.getName() + " & DomainAllowedIPs list is " + Arrays.asList(DomainAllowedIPs));
+
+                int i = 0;
+                for (; i < DomainAllowedIPs.length; i++) {
+                    // Check if each entry in DomainAllowedIPs is an IP subnet (in CIDR notation eg.x.x.x.y/24) or just a single IP (eg. x.x.x.y)
+                    String ipaddr = DomainAllowedIPs[i];
+                    if (ipaddr.indexOf("/") == -1) {
+                        if (ipaddr.equals(req.clientIp))
+                            break;
+                    } else {
+                        SubnetUtils utils = new SubnetUtils(ipaddr);
+                        SubnetInfo info = utils.getInfo();
+                        if (info.isInRange(req.clientIp))
+                            break;
+                    }
+                }
+                if (DomainAllowedIPs.length > 0 && i == DomainAllowedIPs.length)
+                    throw new NginxLookupException(CLIENT_IP + " " + req.clientIp + " " + ACCESS_DENIED_ERRMSG);
+
                 if (req.authMethod.equalsIgnoreCase(AUTHMETH_CERTAUTH)) {
                 	// for cert auth, no need to find the real route, just
                 	// send back zm_auth_token or zm_admin_auth_token
@@ -1034,6 +1070,7 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
         private void sendResult(NginxLookupRequest req, NginxLookupResponse res, String addr, String port, String authUser, boolean useExternalRoute, boolean externalRouteIncludeOriginalAuthusername) throws UnknownHostException {
             ZimbraLog.nginxlookup.debug("mailhost=" + addr);
             ZimbraLog.nginxlookup.debug("port=" + port);
+            ZimbraLog.nginxlookup.debug("clientIp=" + req.clientIp);
 
             HttpServletResponse resp = res.httpResp;
             resp.setStatus(HttpServletResponse.SC_OK);
