@@ -2,11 +2,11 @@
  * ***** BEGIN LICENSE BLOCK *****
  * Zimbra Collaboration Suite Server
  * Copyright (C) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014 Zimbra, Inc.
- * 
+ *
  * This program is free software: you can redistribute it and/or modify it under
  * the terms of the GNU General Public License as published by the Free Software Foundation,
  * version 2 of the License.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
@@ -22,6 +22,7 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -29,6 +30,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import org.apache.commons.net.util.SubnetUtils;
+import org.apache.commons.net.util.SubnetUtils.SubnetInfo;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -187,6 +191,7 @@ public class NginxLookupExtension implements ZimbraExtension {
 
         /* Generic Error Message for failure */
         public static final String ERRMSG = "login failed";
+        public static final String ACCESS_DENIED_ERRMSG = "is not allowed on this domain";
 
         /* protocols */
         public static final String POP3     = "pop3";
@@ -876,6 +881,37 @@ public class NginxLookupExtension implements ZimbraExtension {
                     verifyAccountAdmin(authUser, req.authMethod);
                 }
 
+                // Check if the client IP matches one of the IPs in zimbraDomainAllowedIPs
+                Account acct = null;
+                if (req.authMethod.compareToIgnoreCase(AUTHMETH_ZIMBRAID) == 0) {
+                    acct = prov.get(AccountBy.id, authUser);
+                } else {
+                    acct = prov.get(AccountBy.name, authUser);
+                }
+                Domain userdomain = prov.getDomain(acct);
+                if (userdomain == null)
+                    throw new EntryNotFoundException("domain not found for user:" + authUser);
+                String[] DomainAllowedIPs = userdomain
+                        .getMultiAttr(Provisioning.A_zimbraDomainAllowedIPs);
+                ZimbraLog.nginxlookup.debug("Domain name is " + userdomain.getName() + " & DomainAllowedIPs list is " + Arrays.asList(DomainAllowedIPs));
+
+                int i = 0;
+                for (; i < DomainAllowedIPs.length; i++) {
+                    // Check if each entry in DomainAllowedIPs is an IP subnet (in CIDR notation eg.x.x.x.y/24) or just a single IP (eg. x.x.x.y)
+                    String ipaddr = DomainAllowedIPs[i];
+                    if (ipaddr.indexOf("/") == -1) {
+                        if (ipaddr.equals(req.clientIp))
+                            break;
+                    } else {
+                        SubnetUtils utils = new SubnetUtils(ipaddr);
+                        SubnetInfo info = utils.getInfo();
+                        if (info.isInRange(req.clientIp))
+                            break;
+                    }
+                }
+                if (DomainAllowedIPs.length > 0 && i == DomainAllowedIPs.length)
+                    throw new NginxLookupException(CLIENT_IP + " " + req.clientIp + " " + ACCESS_DENIED_ERRMSG);
+
                 if (req.authMethod.equalsIgnoreCase(AUTHMETH_CERTAUTH)) {
                 	// for cert auth, no need to find the real route, just
                 	// send back zm_auth_token or zm_admin_auth_token
@@ -1175,6 +1211,7 @@ public class NginxLookupExtension implements ZimbraExtension {
         private void sendResult(NginxLookupRequest req, String addr, String port, String authUser, boolean useExternalRoute, boolean externalRouteIncludeOriginalAuthusername) throws UnknownHostException {
             ZimbraLog.nginxlookup.debug("mailhost=" + addr);
             ZimbraLog.nginxlookup.debug("port=" + port);
+            ZimbraLog.nginxlookup.debug("clientIp=" + req.clientIp);
 
             HttpServletResponse resp = req.httpResp;
             resp.setStatus(HttpServletResponse.SC_OK);
