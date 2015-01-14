@@ -41,6 +41,7 @@ import com.zimbra.cs.account.ldap.LdapProv;
 import com.zimbra.cs.account.ldap.LdapProvisioning;
 import com.zimbra.cs.nginx.NginxLookupExtension.NginxLookupRequest;
 import com.zimbra.cs.nginx.NginxLookupExtension.NginxLookupResponse;
+import com.zimbra.cs.util.Zimbra;
 
 public class NginxLookupHandlerTest {
 
@@ -61,7 +62,7 @@ public class NginxLookupHandlerTest {
     private static final String HTTP_PORT     = "7070";
 
     private LdapProv prov;
-    private NginxLookupHandler ldapLookupHandler;
+    private NginxLookupHandler handler;
 
     private enum AuthMethod {
         plain,
@@ -100,8 +101,9 @@ public class NginxLookupHandlerTest {
     public void before() throws Exception {
         Assume.assumeTrue(isLdapServerAvailableForTests());
 
+        Zimbra.startupTest();
         prov = LdapProvisioning.getInst();
-        ldapLookupHandler = new NginxLookupHandler(prov);
+        handler = new NginxLookupHandler(prov);
         prov.getConfig().setDefaultDomainName(DEFAULT_DOMAIN);
 
         // All the tests by default don't depend on DNS lookups
@@ -235,7 +237,7 @@ public class NginxLookupHandlerTest {
         getOrCreateAccount(USER, DEFAULT_DOMAIN);
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imap.name());
         NginxLookupResponse res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, QUSER, getTestServer().getHostName().toLowerCase(), IMAP_PORT);
     }
 
@@ -244,7 +246,7 @@ public class NginxLookupHandlerTest {
         getOrCreateAccount(USER, DEFAULT_DOMAIN);
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imapssl.name());
         NginxLookupResponse res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, QUSER, getTestServer().getHostName().toLowerCase(), IMAP_SSL_PORT);
     }
 
@@ -253,7 +255,7 @@ public class NginxLookupHandlerTest {
         getOrCreateAccount(USER, DEFAULT_DOMAIN);
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3.name());
         NginxLookupResponse res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, QUSER, getTestServer().getHostName().toLowerCase(), POP3_PORT);
     }
 
@@ -262,7 +264,7 @@ public class NginxLookupHandlerTest {
         getOrCreateAccount(USER, DEFAULT_DOMAIN);
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3ssl.name());
         NginxLookupResponse res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, QUSER, getTestServer().getHostName().toLowerCase(), POP3_SSL_PORT);
     }
 
@@ -271,7 +273,7 @@ public class NginxLookupHandlerTest {
         getOrCreateAccount(USER, DEFAULT_DOMAIN);
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.http.name());
         NginxLookupResponse res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, QUSER, getTestServer().getHostName().toLowerCase(), HTTP_PORT);
     }
 
@@ -288,22 +290,22 @@ public class NginxLookupHandlerTest {
 
         NginxLookupRequest req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3.name());
         NginxLookupResponse res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "1");
 
         req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3ssl.name());
         res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "2");
 
         req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imap.name());
         res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "3");
 
         req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imapssl.name());
         res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "4");
 
         deleteAccount(acct);
@@ -324,22 +326,22 @@ public class NginxLookupHandlerTest {
 
         NginxLookupRequest req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3.name());
         NginxLookupResponse res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "5");
 
         req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3ssl.name());
         res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "6");
 
         req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imap.name());
         res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "7");
 
         req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imapssl.name());
         res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "8");
 
         deleteAccount(acct);
@@ -360,22 +362,22 @@ public class NginxLookupHandlerTest {
 
         NginxLookupRequest req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3.name());
         NginxLookupResponse res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "1");
 
         req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3ssl.name());
         res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "2");
 
         req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imap.name());
         res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "3");
 
         req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imapssl.name());
         res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "4");
 
         deleteAccount(acct);
@@ -396,22 +398,22 @@ public class NginxLookupHandlerTest {
 
         NginxLookupRequest req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3.name());
         NginxLookupResponse res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "5");
 
         req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3ssl.name());
         res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "6");
 
         req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imap.name());
         res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "7");
 
         req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imapssl.name());
         res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "8");
 
         deleteAccount(acct);
@@ -425,26 +427,28 @@ public class NginxLookupHandlerTest {
         String quser = user + "@" + domainName;
 
         Domain domain = getOrCreateDomain(domainName);
-        setupExternalRoute(domain, true, true, "5", "6", "7", "8");
+        boolean useExternalRoute = true;
+        boolean useExternalRouteIfAccountNotExists = true;
+        setupExternalRoute(domain, useExternalRoute, useExternalRouteIfAccountNotExists, "5", "6", "7", "8");
 
         NginxLookupRequest req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3.name());
         NginxLookupResponse res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "5");
 
         req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3ssl.name());
         res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "6");
 
         req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imap.name());
         res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "7");
 
         req = new NginxLookupRequest(quser, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imapssl.name());
         res = new NginxLookupResponse();
-        ldapLookupHandler.search(req, res);
+        handler.search(req, res);
         assertBasic(res, quser, LOCALHOST, "8");
 
         deleteDomain(domain);

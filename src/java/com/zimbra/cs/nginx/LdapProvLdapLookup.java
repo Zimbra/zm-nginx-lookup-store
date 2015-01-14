@@ -42,25 +42,27 @@ import com.zimbra.cs.ldap.ZLdapFilterFactory.FilterId;
 import com.zimbra.cs.nginx.NginxLookupExtension.EntryNotFoundException;
 import com.zimbra.cs.nginx.NginxLookupExtension.NginxLookupException;
 
-public class NginxLookupLdapHelper extends AbstractNginxLookupLdapHelper {
+/** A LdapLookup adapter that performs operations against an LdapProv target */
+public class LdapProvLdapLookup implements LdapLookup {
+    protected LdapProv prov;
 
-    NginxLookupLdapHelper(LdapProv prov) {
-        super(prov);
+    public LdapProvLdapLookup(LdapProv prov) {
+        this.prov = prov;
     }
 
     @Override
-    ILdapContext getLdapContext() throws ServiceException {
+    public ILdapContext getLdapContext() throws ServiceException {
         return LdapClient.getContext(LdapUsage.NGINX_LOOKUP);
     }
 
     @Override
-    void closeLdapContext(ILdapContext ldapContext) {
+    public void closeLdapContext(ILdapContext ldapContext) {
         ZLdapContext zlc = LdapClient.toZLdapContext(prov, ldapContext);
         LdapClient.closeContext(zlc);
     }
 
     @Override
-    Map<String, Object> searchDir(ILdapContext ldapContext, String[] returnAttrs,
+    public Map<String, Object> searchDir(ILdapContext ldapContext, String[] returnAttrs,
             Config config, ZLdapFilter filter, String searchBaseConfigAttr)
     throws NginxLookupException {
 
@@ -99,7 +101,7 @@ public class NginxLookupLdapHelper extends AbstractNginxLookupLdapHelper {
     }
 
     @Override
-    SearchDirResult searchDirectory(ILdapContext ldapContext, String[] returnAttrs,
+    public SearchDirResult searchDirectory(ILdapContext ldapContext, String[] returnAttrs,
             Config config, FilterId filterId, String queryTemplate, String searchBase,
             String templateKey, String templateVal, Map<String, Boolean> attrs,
             Set<String> extraAttrs)

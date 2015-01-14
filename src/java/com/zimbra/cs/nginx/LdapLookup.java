@@ -2,11 +2,11 @@
  * ***** BEGIN LICENSE BLOCK *****
  * Zimbra Collaboration Suite Server
  * Copyright (C) 2011, 2013, 2014 Zimbra, Inc.
- * 
+ *
  * This program is free software: you can redistribute it and/or modify it under
  * the terms of the GNU General Public License as published by the Free Software Foundation,
  * version 2 of the License.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
@@ -27,30 +27,24 @@ import com.zimbra.cs.ldap.ZLdapFilter;
 import com.zimbra.cs.ldap.ZLdapFilterFactory.FilterId;
 import com.zimbra.cs.nginx.NginxLookupExtension.NginxLookupException;
 
-abstract class AbstractNginxLookupLdapHelper {
-    
-    LdapProv prov;
-    
-    AbstractNginxLookupLdapHelper(LdapProv prov) {
-        this.prov = prov;
-    }
-    
+public interface LdapLookup {
+
     static class SearchDirResult {
-        // key of the map is one of the zimbraReverseProvyXXXAttribute 
+        // key of the map is one of the zimbraReverseProvyXXXAttribute
         // value is the attr value of the attribute stored in the corresponding zimbraReverseProvyXXXAttribute
-        Map<String, String> configuredAttrs; 
-        
+        Map<String, String> configuredAttrs;
+
         // key of the map the ldap attribute name
         // value is ldap attribute value
         Map<String, String> extraAttrs;
     }
-    
-    abstract ILdapContext getLdapContext() throws ServiceException;
-    
-    abstract void closeLdapContext(ILdapContext ldapContext);
-    
+
+    public ILdapContext getLdapContext() throws ServiceException;
+
+    public void closeLdapContext(ILdapContext ldapContext);
+
     /**
-     * 
+     *
      * @param zlc
      * @param returnAttrs
      * @param config
@@ -59,12 +53,12 @@ abstract class AbstractNginxLookupLdapHelper {
      * @return
      * @throws NginxLookupException
      */
-    abstract Map<String, Object> searchDir(ILdapContext ldapContext, String[] returnAttrs, 
-            Config config, ZLdapFilter filter, String searchBaseConfigAttr) 
+    public Map<String, Object> searchDir(ILdapContext ldapContext, String[] returnAttrs,
+            Config config, ZLdapFilter filter, String searchBaseConfigAttr)
     throws NginxLookupException;
-    
+
     /**
-     * 
+     *
      * @param zlc
      * @param returnAttrs
      * @param config
@@ -78,9 +72,9 @@ abstract class AbstractNginxLookupLdapHelper {
      * @return
      * @throws NginxLookupException
      */
-    abstract SearchDirResult searchDirectory(ILdapContext ldapContext, String[] returnAttrs, 
-            Config config, FilterId filterId, String queryTemplate, String searchBase, 
-            String templateKey, String templateVal, Map<String, Boolean> attrs, Set<String> extraAttrs) 
+    public SearchDirResult searchDirectory(ILdapContext ldapContext, String[] returnAttrs,
+            Config config, FilterId filterId, String queryTemplate, String searchBase,
+            String templateKey, String templateVal, Map<String, Boolean> attrs, Set<String> extraAttrs)
     throws NginxLookupException;
-    
+
 }

@@ -21,10 +21,10 @@ public class ServerInfo extends LookupEntry {
     private String mHttpPort;
     private String mHttpSSLPort;
     private String mHttpAdminPort;
-    private String mHttpPop3Port;
-    private String mHttpPop3SSLPort;
-    private String mHttpImapPort;
-    private String mHttpImapSSLPort;
+    private String mPop3Port;
+    private String mPop3SSLPort;
+    private String mImapPort;
+    private String mImapSSLPort;
     
     ServerInfo(String serverName) {
         super(serverName);
@@ -43,30 +43,30 @@ public class ServerInfo extends LookupEntry {
     }
     
     void setPop3Port(String port) {
-        mHttpPop3Port = port;
+        mPop3Port = port;
     }
     
     void setPop3SSLPort(String port) {
-        mHttpPop3SSLPort = port;
+        mPop3SSLPort = port;
     }
     
     void setImapPort(String port) {
-        mHttpImapPort = port;
+        mImapPort = port;
     }
     
     void setImapSSLPort(String port) {
-        mHttpImapSSLPort = port;
+        mImapSSLPort = port;
     }
     
     String getPortForProto(String proto, boolean isZimbraAdmin) {
         if (NginxLookupHandler.POP3.equalsIgnoreCase(proto))
-            return mHttpPop3Port;
+            return mPop3Port;
         else if (NginxLookupHandler.POP3_SSL.equalsIgnoreCase(proto))
-            return mHttpPop3SSLPort;
+            return mPop3SSLPort;
         else if (NginxLookupHandler.IMAP.equalsIgnoreCase(proto))
-            return mHttpImapPort;
+            return mImapPort;
         else if (NginxLookupHandler.IMAP_SSL.equalsIgnoreCase(proto))
-            return mHttpImapSSLPort;
+            return mImapSSLPort;
         else if (NginxLookupHandler.HTTP.equalsIgnoreCase(proto)) {
             return mHttpPort;            
         } else if (NginxLookupHandler.HTTP_SSL.equalsIgnoreCase(proto)) {

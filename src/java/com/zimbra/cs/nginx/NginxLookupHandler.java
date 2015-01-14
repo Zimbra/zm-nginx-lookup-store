@@ -5,24 +5,24 @@ import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.commons.net.util.SubnetUtils;
-import org.apache.commons.net.util.SubnetUtils.SubnetInfo;
-
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.commons.net.util.SubnetUtils;
+import org.apache.commons.net.util.SubnetUtils.SubnetInfo;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.zimbra.common.account.Key;
-import com.zimbra.common.account.ProvisioningConstants;
 import com.zimbra.common.account.Key.AccountBy;
+import com.zimbra.common.account.ProvisioningConstants;
 import com.zimbra.common.account.ZAttrProvisioning.IPMode;
 import com.zimbra.common.localconfig.LC;
 import com.zimbra.common.service.ServiceException;
@@ -38,6 +38,7 @@ import com.zimbra.cs.account.Server;
 import com.zimbra.cs.account.auth.AuthContext;
 import com.zimbra.cs.account.auth.AuthMechanism;
 import com.zimbra.cs.account.ldap.LdapProv;
+import com.zimbra.cs.consul.ServiceLocator;
 import com.zimbra.cs.extension.ExtensionException;
 import com.zimbra.cs.extension.ExtensionHttpHandler;
 import com.zimbra.cs.extension.ZimbraExtension;
@@ -45,13 +46,14 @@ import com.zimbra.cs.ldap.ILdapContext;
 import com.zimbra.cs.ldap.ZLdapFilter;
 import com.zimbra.cs.ldap.ZLdapFilterFactory;
 import com.zimbra.cs.ldap.ZLdapFilterFactory.FilterId;
-import com.zimbra.cs.nginx.AbstractNginxLookupLdapHelper.SearchDirResult;
+import com.zimbra.cs.nginx.LdapLookup.SearchDirResult;
 import com.zimbra.cs.nginx.NginxLookupExtension.EntryNotFoundException;
 import com.zimbra.cs.nginx.NginxLookupExtension.NginxLookupException;
 import com.zimbra.cs.nginx.NginxLookupExtension.NginxLookupRequest;
 import com.zimbra.cs.nginx.NginxLookupExtension.NginxLookupResponse;
 import com.zimbra.cs.service.AuthProvider;
 import com.zimbra.cs.service.authenticator.ClientCertAuthenticator;
+import com.zimbra.cs.util.Zimbra;
 
 public class NginxLookupHandler extends ExtensionHttpHandler {
         /* req headers */
@@ -97,7 +99,8 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
         public static final String AUTHMETH_CERTAUTH = "certauth";
 
         protected LdapProv prov;
-        protected AbstractNginxLookupLdapHelper helper;
+        protected LdapLookup ldapLookup;
+        protected ServiceLocator serviceLocator;
 
         @Override
         public boolean hideFromDefaultPorts() {
@@ -107,7 +110,8 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
         public NginxLookupHandler() throws ExtensionException {
             try {
                 prov = LdapProv.getInst();
-                helper = new NginxLookupLdapHelper(prov);
+                ldapLookup = new LdapProvLdapLookup(prov);
+                serviceLocator = Zimbra.getAppContext().getBean(ServiceLocator.class);
             } catch (ServiceException e) {
                 throw new ExtensionException("unable to initialize nginx lookup servlet", e);
             }
@@ -115,12 +119,17 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
 
         public NginxLookupHandler(LdapProv ldapProv) throws ExtensionException {
             prov = ldapProv;
-            helper = new NginxLookupLdapHelper(prov);
+            ldapLookup = new LdapProvLdapLookup(prov);
+            serviceLocator = Zimbra.getAppContext().getBean(ServiceLocator.class);
         }
 
         @Override
         public void init(ZimbraExtension ext) throws ServiceException {
             super.init(ext);
+        }
+
+        public void setServiceLocator(ServiceLocator serviceLocator) {
+            this.serviceLocator = serviceLocator;
         }
 
         @VisibleForTesting
@@ -201,6 +210,21 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
             return attrs.toArray(new String[attrs.size()]);
         }
 
+        protected String getServiceIDForProto(String proto) {
+            if ("http".equals(proto)) {
+                return "zimbra:web";
+            } else if ("imap".equals(proto)) {
+                return "zimbra:ImapServer";
+            } else if ("imaps".equals(proto)) {
+                return "zimbra:ImapSSLServer";
+            } else if ("pop".equals(proto)) {
+                return "zimbra:Pop3Server";
+            } else if ("pops".equals(proto)) {
+                return "zimbra:Pop3SSLServer";
+            } else {
+                return null;
+            }
+        }
 
         @Override
         public void doGet(HttpServletRequest httpReq, HttpServletResponse httpRes) throws IOException, ServletException {
@@ -462,7 +486,7 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                     Map<String, Boolean> attrs = new HashMap<String, Boolean>();
                     attrs.put(Provisioning.A_zimbraReverseProxyDomainNameAttribute, true);
 
-                    SearchDirResult sdr = helper.searchDirectory(
+                    SearchDirResult sdr = ldapLookup.searchDirectory(
                             zlc,
                             getDomainSC(config),
                             config,
@@ -496,7 +520,7 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
             if (domainExternalRouteInfo == null) {
                 try {
                     ZLdapFilter filter = ZLdapFilterFactory.getInstance().domainByName(domainName);
-                    Map<String, Object> domainAttrs = helper.searchDir(zlc,
+                    Map<String, Object> domainAttrs = ldapLookup.searchDir(zlc,
                             getDomainSC(config),
                             config,
                             filter,
@@ -561,7 +585,7 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                 attrs.put(Provisioning.A_zimbraReverseProxyImapPortAttribute, false);
                 attrs.put(Provisioning.A_zimbraReverseProxyImapSSLPortAttribute, false);
 
-                SearchDirResult sdr = helper.searchDirectory(
+                SearchDirResult sdr = ldapLookup.searchDirectory(
                         zlc,
                         getServerSC(config),
                         config,
@@ -768,7 +792,7 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
         void search(NginxLookupRequest req, NginxLookupResponse res) throws NginxLookupException {
             ILdapContext zlc = null;
             try {
-                zlc = helper.getLdapContext();
+                zlc = ldapLookup.getLdapContext();
 
                 Config config = prov.getConfig();
                 String authUser = getQualifiedUsername(zlc, config, req);
@@ -786,29 +810,31 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                 } else {
                     acct = prov.get(AccountBy.name, authUser);
                 }
-                Domain userdomain = prov.getDomain(acct);
-                if (userdomain == null)
-                    throw new EntryNotFoundException("domain not found for user:" + authUser);
-                String[] DomainAllowedIPs = userdomain
-                     .getMultiAttr(Provisioning.A_zimbraDomainAllowedIPs);
-                ZimbraLog.nginxlookup.debug("Domain name is " + userdomain.getName() + " & DomainAllowedIPs list is " + Arrays.asList(DomainAllowedIPs));
+                if (acct != null) {
+                    Domain userdomain = prov.getDomain(acct);
+                    if (userdomain == null)
+                        throw new EntryNotFoundException("domain not found for user:" + authUser);
+                    String[] DomainAllowedIPs = userdomain
+                         .getMultiAttr(Provisioning.A_zimbraDomainAllowedIPs);
+                    ZimbraLog.nginxlookup.debug("Domain name is " + userdomain.getName() + " & DomainAllowedIPs list is " + Arrays.asList(DomainAllowedIPs));
 
-                int i = 0;
-                for (; i < DomainAllowedIPs.length; i++) {
-                    // Check if each entry in DomainAllowedIPs is an IP subnet (in CIDR notation eg.x.x.x.y/24) or just a single IP (eg. x.x.x.y)
-                    String ipaddr = DomainAllowedIPs[i];
-                    if (ipaddr.indexOf("/") == -1) {
-                        if (ipaddr.equals(req.clientIp))
-                            break;
-                    } else {
-                        SubnetUtils utils = new SubnetUtils(ipaddr);
-                        SubnetInfo info = utils.getInfo();
-                        if (info.isInRange(req.clientIp))
-                            break;
+                    int i = 0;
+                    for (; i < DomainAllowedIPs.length; i++) {
+                        // Check if each entry in DomainAllowedIPs is an IP subnet (in CIDR notation eg.x.x.x.y/24) or just a single IP (eg. x.x.x.y)
+                        String ipaddr = DomainAllowedIPs[i];
+                        if (ipaddr.indexOf("/") == -1) {
+                            if (ipaddr.equals(req.clientIp))
+                                break;
+                        } else {
+                            SubnetUtils utils = new SubnetUtils(ipaddr);
+                            SubnetInfo info = utils.getInfo();
+                            if (info.isInRange(req.clientIp))
+                                break;
+                        }
                     }
+                    if (DomainAllowedIPs.length > 0 && i == DomainAllowedIPs.length)
+                        throw new NginxLookupException(CLIENT_IP + " " + req.clientIp + " " + ACCESS_DENIED_ERRMSG);
                 }
-                if (DomainAllowedIPs.length > 0 && i == DomainAllowedIPs.length)
-                    throw new NginxLookupException(CLIENT_IP + " " + req.clientIp + " " + ACCESS_DENIED_ERRMSG);
 
                 if (req.authMethod.equalsIgnoreCase(AUTHMETH_CERTAUTH)) {
                 	// for cert auth, no need to find the real route, just
@@ -846,7 +872,7 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
 
                 String authUserWithRealDomainName = authUser;
                 try {
-                    sdr = helper.searchDirectory(
+                    sdr = ldapLookup.searchDirectory(
                             zlc,
                             getUserSC(config),
                             config,
@@ -874,7 +900,7 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                     if (authUserWithRealDomainName != null) {
                         ZimbraLog.nginxlookup.debug("retrying with resolved domain alias: " + authUserWithRealDomainName);
                         try {
-                            sdr = helper.searchDirectory(
+                            sdr = ldapLookup.searchDirectory(
                                     zlc,
                                     getUserSC(config),
                                     config,
@@ -988,7 +1014,6 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                         ZimbraLog.nginxlookup.debug("external route for user " + authUserWithRealDomainName + ", host=" + mailhost + ", port =" + port);
                 }
 
-
                 // use internal route
 
                 if (mailhost == null)
@@ -1012,7 +1037,7 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
             } catch (Exception e) {
                 throw new NginxLookupException(e);
             } finally {
-                helper.closeLdapContext(zlc);
+                ldapLookup.closeLdapContext(zlc);
             }
         }
 
