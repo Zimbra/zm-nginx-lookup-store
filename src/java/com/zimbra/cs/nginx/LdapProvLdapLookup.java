@@ -75,13 +75,11 @@ public class LdapProvLdapLookup implements LdapLookup {
             base = LdapConstants.DN_ROOT_DSE;
         }
 
-        ZSearchControls searchControls = ZSearchControls.createSearchControls(
-                ZSearchScope.SEARCH_SCOPE_SUBTREE, 1, returnAttrs);
+        ZSearchControls searchControls = ZSearchControls.createSearchControls(ZSearchScope.SEARCH_SCOPE_SUBTREE, 1, returnAttrs);
 
-        ZSearchResultEnumeration ne = null;
         try {
+            ZSearchResultEnumeration ne = zlc.searchDir(base, filter, searchControls);
             try {
-                ne = zlc.searchDir(base, filter, searchControls);
                 if (!ne.hasMore()) {
                     throw new NginxLookupException("query returned empty result: " + filter.toFilterString());
                 }
@@ -89,9 +87,7 @@ public class LdapProvLdapLookup implements LdapLookup {
                 ZAttributes ldapAttrs = sr.getAttributes();
                 attrs = ldapAttrs.getAttrs();
             } finally {
-                if (ne != null) {
-                    ne.close();
-                }
+                ne.close();
             }
         } catch (ServiceException e) {
             throw new NginxLookupException("unable to search LDAP", e);
@@ -124,18 +120,12 @@ public class LdapProvLdapLookup implements LdapLookup {
             base = LdapConstants.DN_ROOT_DSE;
         }
 
-        ZSearchControls searchControls = ZSearchControls.createSearchControls(
-                ZSearchScope.SEARCH_SCOPE_SUBTREE, 1, returnAttrs);
+        ZSearchControls searchControls = ZSearchControls.createSearchControls(ZSearchScope.SEARCH_SCOPE_SUBTREE, 1, returnAttrs);
 
         SearchDirResult sdr = new SearchDirResult();
-
-        ZSearchResultEnumeration ne = null;
         try {
+            ZSearchResultEnumeration ne = zlc.searchDir(base, ZLdapFilterFactory.getInstance().fromFilterString(filterId, query), searchControls);
             try {
-                ne = zlc.searchDir(base,
-                        ZLdapFilterFactory.getInstance().fromFilterString(filterId, query),
-                        searchControls);
-
                 if (!ne.hasMore())
                     throw new EntryNotFoundException("query returned empty result: "+query);
                 ZSearchResultEntry sr = ne.next();
@@ -153,9 +143,7 @@ public class LdapProvLdapLookup implements LdapLookup {
                     }
                 }
             } finally {
-                if (ne != null) {
-                    ne.close();
-                }
+                ne.close();
             }
         } catch (ServiceException e) {
             throw new NginxLookupException("unable to search LDAP", e);

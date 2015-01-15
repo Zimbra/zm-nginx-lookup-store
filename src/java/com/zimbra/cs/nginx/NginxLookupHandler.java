@@ -9,7 +9,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
 import javax.servlet.ServletException;
@@ -27,6 +29,7 @@ import com.zimbra.common.account.ZAttrProvisioning.IPMode;
 import com.zimbra.common.localconfig.LC;
 import com.zimbra.common.service.ServiceException;
 import com.zimbra.common.util.StringUtil;
+import com.zimbra.common.util.Triple;
 import com.zimbra.common.util.ZimbraLog;
 import com.zimbra.cs.account.AccessManager;
 import com.zimbra.cs.account.Account;
@@ -854,7 +857,7 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                 }
 
                 Map<String, Boolean> attrs = new HashMap<String, Boolean>();
-                attrs.put(Provisioning.A_zimbraReverseProxyMailHostAttribute, true);
+                attrs.put(Provisioning.A_zimbraReverseProxyMailHostAttribute, false);
                 attrs.put(Provisioning.A_zimbraReverseProxyUserNameAttribute, false);
 
                 Set<String> extraAttrs = new HashSet<String>();
@@ -1016,17 +1019,41 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
 
                 // use internal route
 
-                if (mailhost == null)
+                // when an account-to-mailstore association already exists in LDAP
+                if (mailhost == null && !acct.isAccountExternal()) {
                     mailhost = vals.get(Provisioning.A_zimbraReverseProxyMailHostAttribute);
-                if (mailhost == null)
-                    throw new NginxLookupException("mailhost not found for user: "+req.user);
-
-                if (port == null)
-                    port = getPortByMailhostAndProto(zlc, config, req, mailhost);
-
-                if(doDnsLookup) {
-                	mailhost = this.getIPByIPMode(mailhost).getHostAddress();
                 }
+
+                // when no account-to-mailstore association exists in LDAP, use Consul to pick a new upstream
+                if (mailhost == null) {
+                    ZimbraLog.nginxlookup.debug("no mailhost found for user: " + req.user + ", performing Service Locator lookup to assign a new upstream");
+                    String serviceID = getServiceIDForProto(req.proto);
+                    List<Triple<String,String,Integer>> list = serviceLocator.find(serviceID, true);
+                    Triple<String,String,Integer> serviceInfo = null;
+                    if (list.size() == 1) {
+                        serviceInfo = list.get(0);
+                    } else if (list.size() > 1) {
+                        int pickOne = new Random().nextInt(list.size() - 1);
+                        serviceInfo = list.get(pickOne);
+                    }
+                    if (serviceInfo != null) {
+                        mailhost = list.get(0).getFirst();
+                        port = Integer.toString(list.get(0).getThird());
+
+                        // save the new server association
+                        acct.setMailHost(mailhost);
+                        ZimbraLog.nginxlookup.info("User: " + req.user + " now assigned to mailhost: " + mailhost);
+                    }
+                }
+
+                if (mailhost != null) {
+                    if (port == null)
+                        port = getPortByMailhostAndProto(zlc, config, req, mailhost);
+                    if (doDnsLookup) {
+                    	mailhost = this.getIPByIPMode(mailhost).getHostAddress();
+                    }
+                }
+
                 sendResult(req, res, mailhost, port, authUser, useExternalRoute, externalRouteIncludeOriginalAuthusername);
             } catch (NginxLookupException e) {
                 throw e;

@@ -17,13 +17,18 @@
 
 package com.zimbra.cs.nginx;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import junit.framework.Assert;
 
+import org.apache.commons.lang.StringUtils;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -34,11 +39,15 @@ import com.unboundid.ldap.sdk.LDAPConnectionOptions;
 import com.zimbra.common.account.Key;
 import com.zimbra.common.account.ProvisioningConstants;
 import com.zimbra.common.service.ServiceException;
+import com.zimbra.common.util.Triple;
 import com.zimbra.cs.account.Account;
 import com.zimbra.cs.account.Domain;
 import com.zimbra.cs.account.Provisioning;
+import com.zimbra.cs.account.Server;
 import com.zimbra.cs.account.ldap.LdapProv;
 import com.zimbra.cs.account.ldap.LdapProvisioning;
+import com.zimbra.cs.consul.CatalogRegistration;
+import com.zimbra.cs.consul.ServiceLocator;
 import com.zimbra.cs.nginx.NginxLookupExtension.NginxLookupRequest;
 import com.zimbra.cs.nginx.NginxLookupExtension.NginxLookupResponse;
 import com.zimbra.cs.util.Zimbra;
@@ -47,20 +56,14 @@ public class NginxLookupHandlerTest {
 
     private static final String USER = "user1";
     private static final String DEFAULT_DOMAIN = "phoebe.mbp";
-
     private static final String QUSER = USER + "@" + DEFAULT_DOMAIN;
-
     private static final String PASSWORD = "test123";
-
     private static final String LOCALHOST = "localhost";
-    private static final String LOCALHOST_IP = "127.0.0.1";
-
     private static final String POP3_PORT     = "7110";
     private static final String POP3_SSL_PORT = "7995";
     private static final String IMAP_PORT     = "7143";
     private static final String IMAP_SSL_PORT = "7993";
     private static final String HTTP_PORT     = "7070";
-
     private LdapProv prov;
     private NginxLookupHandler handler;
 
@@ -123,7 +126,7 @@ public class NginxLookupHandlerTest {
     }
 
     void assertHeader(NginxLookupResponse res, String header, String expectedValue) {
-        Assert.assertEquals(expectedValue, res.httpResp.getHeader(header));
+        Assert.assertEquals(StringUtils.lowerCase(expectedValue), StringUtils.lowerCase(res.httpResp.getHeader(header)));
     }
 
     void assertAuthStatusOK(NginxLookupResponse res) {
@@ -238,7 +241,33 @@ public class NginxLookupHandlerTest {
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imap.name());
         NginxLookupResponse res = new NginxLookupResponse();
         handler.search(req, res);
-        assertBasic(res, QUSER, getTestServer().getHostName().toLowerCase(), IMAP_PORT);
+        assertBasic(res, QUSER, getTestServer().getHostName(), IMAP_PORT);
+    }
+
+    @Test
+    public void imapForAccountWithoutServerAssigned() throws Exception {
+        final String HOSTNAME = getTestServer().getHostName();
+        final String HOSTADDR = "1.2.3.4";
+        final int PORT = 1000 + new Random().nextInt(100);
+        handler.setServiceLocator(new ServiceLocator() {
+            public void deregister(String serviceID) throws IOException, ServiceException {}
+            public void deregisterSilent(String serviceID) {}
+            public List<Triple<String,String,Integer>> find(String serviceID, boolean healthyOnly) throws IOException, ServiceException {
+                List<Triple<String,String,Integer>> result = new ArrayList<>();
+                result.add(new Triple<>(HOSTNAME, HOSTADDR, PORT));
+                return result;
+            }
+            public void ping() throws IOException {}
+            public void register(CatalogRegistration.Service service) throws IOException, ServiceException {}
+            public void registerSilent(CatalogRegistration.Service service) {}
+        });
+
+        Account account = getOrCreateAccount(USER, DEFAULT_DOMAIN);
+        account.unsetMailHost();
+        NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imap.name());
+        NginxLookupResponse res = new NginxLookupResponse();
+        handler.search(req, res);
+        assertBasic(res, QUSER, HOSTNAME, "" + PORT);
     }
 
     @Test
@@ -247,7 +276,7 @@ public class NginxLookupHandlerTest {
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imapssl.name());
         NginxLookupResponse res = new NginxLookupResponse();
         handler.search(req, res);
-        assertBasic(res, QUSER, getTestServer().getHostName().toLowerCase(), IMAP_SSL_PORT);
+        assertBasic(res, QUSER, getTestServer().getHostName(), IMAP_SSL_PORT);
     }
 
     @Test
@@ -256,7 +285,7 @@ public class NginxLookupHandlerTest {
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3.name());
         NginxLookupResponse res = new NginxLookupResponse();
         handler.search(req, res);
-        assertBasic(res, QUSER, getTestServer().getHostName().toLowerCase(), POP3_PORT);
+        assertBasic(res, QUSER, getTestServer().getHostName(), POP3_PORT);
     }
 
     @Test
@@ -265,7 +294,7 @@ public class NginxLookupHandlerTest {
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3ssl.name());
         NginxLookupResponse res = new NginxLookupResponse();
         handler.search(req, res);
-        assertBasic(res, QUSER, getTestServer().getHostName().toLowerCase(), POP3_SSL_PORT);
+        assertBasic(res, QUSER, getTestServer().getHostName(), POP3_SSL_PORT);
     }
 
     @Test
@@ -274,7 +303,7 @@ public class NginxLookupHandlerTest {
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.http.name());
         NginxLookupResponse res = new NginxLookupResponse();
         handler.search(req, res);
-        assertBasic(res, QUSER, getTestServer().getHostName().toLowerCase(), HTTP_PORT);
+        assertBasic(res, QUSER, getTestServer().getHostName(), HTTP_PORT);
     }
 
     @Test
