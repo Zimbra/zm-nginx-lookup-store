@@ -17,14 +17,12 @@
 
 package com.zimbra.cs.nginx;
 
-import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.UUID;
 
 import junit.framework.Assert;
 
@@ -39,15 +37,13 @@ import com.unboundid.ldap.sdk.LDAPConnectionOptions;
 import com.zimbra.common.account.Key;
 import com.zimbra.common.account.ProvisioningConstants;
 import com.zimbra.common.service.ServiceException;
-import com.zimbra.common.util.Triple;
 import com.zimbra.cs.account.Account;
 import com.zimbra.cs.account.Domain;
 import com.zimbra.cs.account.Provisioning;
+import com.zimbra.cs.account.Provisioning.MailMode;
 import com.zimbra.cs.account.Server;
 import com.zimbra.cs.account.ldap.LdapProv;
 import com.zimbra.cs.account.ldap.LdapProvisioning;
-import com.zimbra.cs.consul.CatalogRegistration;
-import com.zimbra.cs.consul.ServiceLocator;
 import com.zimbra.cs.nginx.NginxLookupExtension.NginxLookupRequest;
 import com.zimbra.cs.nginx.NginxLookupExtension.NginxLookupResponse;
 import com.zimbra.cs.util.Zimbra;
@@ -152,13 +148,14 @@ public class NginxLookupHandlerTest {
         assertAuthPort(res, expectedPort);
     }
 
-    private Account getOrCreateAccount(String localpart, String domainName) throws ServiceException {
+    private Account createAccount(String localpart, String domainName) throws ServiceException {
         getOrCreateDomain(domainName);
-        Account account = prov.getAccountByName(localpart+"@"+domainName);
-        if (account == null) {
-            account = prov.createAccount(localpart+"@"+domainName, PASSWORD, new HashMap<String, Object>());
+        Account acct = prov.getAccountByName(localpart+"@"+domainName);
+        if (acct != null) {
+            deleteAccount(acct);
         }
-        return account;
+        acct = prov.createAccount(localpart+"@"+domainName, PASSWORD, new HashMap<String, Object>());
+        return acct;
     }
 
     private void deleteAccount(Account acct) throws ServiceException {
@@ -183,6 +180,26 @@ public class NginxLookupHandlerTest {
 
     private void deleteDomain(Domain domain) throws ServiceException {
         prov.deleteDomain(domain.getId());
+    }
+
+    private Server createServer(String serverName) throws ServiceException {
+        Map<String, Object> attrs = new HashMap<String, Object>();
+        attrs.put(Provisioning.A_zimbraMailMode, MailMode.http.toString());
+        attrs.put(Provisioning.A_zimbraSmtpPort, "7025");
+        attrs.put(Provisioning.A_zimbraLowestSupportedAuthVersion, "1");
+        return prov.createServer(serverName, attrs);
+    }
+
+    private Server getServer(String name) throws ServiceException {
+        return prov.get(Key.ServerBy.name, name);
+    }
+
+    private Server getOrCreateServer(String serverName) throws ServiceException {
+        Server server = getServer(serverName);
+        if (server == null) {
+            server = createServer(serverName);
+        }
+        return server;
     }
 
     private void setupExternalRoute(Account acct, Boolean useExternalRoute,
@@ -237,7 +254,7 @@ public class NginxLookupHandlerTest {
 
     @Test
     public void imap() throws Exception {
-        getOrCreateAccount(USER, DEFAULT_DOMAIN);
+        createAccount(USER, DEFAULT_DOMAIN);
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imap.name());
         NginxLookupResponse res = new NginxLookupResponse();
         handler.search(req, res);
@@ -249,20 +266,13 @@ public class NginxLookupHandlerTest {
         final String HOSTNAME = getTestServer().getHostName();
         final String HOSTADDR = "1.2.3.4";
         final int PORT = 1000 + new Random().nextInt(100);
-        handler.setServiceLocator(new ServiceLocator() {
-            public void deregister(String serviceID) throws IOException, ServiceException {}
-            public void deregisterSilent(String serviceID) {}
-            public List<Triple<String,String,Integer>> find(String serviceID, boolean healthyOnly) throws IOException, ServiceException {
-                List<Triple<String,String,Integer>> result = new ArrayList<>();
-                result.add(new Triple<>(HOSTNAME, HOSTADDR, PORT));
-                return result;
-            }
-            public void ping() throws IOException {}
-            public void register(CatalogRegistration.Service service) throws IOException, ServiceException {}
-            public void registerSilent(CatalogRegistration.Service service) {}
-        });
+        final String serviceID = NginxLookupHandler.getServiceIDForProto(AuthProtocol.imap.name());
 
-        Account account = getOrCreateAccount(USER, DEFAULT_DOMAIN);
+        MockServiceLocator serviceLocator = new MockServiceLocator();
+        serviceLocator.add(serviceID, HOSTNAME, HOSTADDR, PORT);
+        handler.setServiceLocator(serviceLocator);
+
+        Account account = createAccount(USER, DEFAULT_DOMAIN);
         account.unsetMailHost();
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imap.name());
         NginxLookupResponse res = new NginxLookupResponse();
@@ -270,9 +280,52 @@ public class NginxLookupHandlerTest {
         assertBasic(res, QUSER, HOSTNAME, "" + PORT);
     }
 
+    /** When 2 IMAP upstreams exist, test whether one can fail and the other gets assigned the account */
+    @Test
+    public void imapFailover() throws Exception {
+        final String HOSTNAME_A = "serverA.acme.org";
+        final String HOSTNAME_B = "serverB.acme.org";
+        final String HOSTADDR_A = "1.2.3.4";
+        final String HOSTADDR_B = "2.3.4.5";
+        final int PORT_A = 1000 + new Random().nextInt(100);
+        final int PORT_B = PORT_A + 1;
+        final String serviceID = NginxLookupHandler.getServiceIDForProto(AuthProtocol.imap.name());
+
+        Server server_A = getOrCreateServer(HOSTNAME_A);
+        server_A.addServiceEnabled(Provisioning.SERVICE_MAILBOX);
+        server_A.setImapBindPort(PORT_A);
+
+        Server server_B = getOrCreateServer(HOSTNAME_B);
+        server_B.addServiceEnabled(Provisioning.SERVICE_MAILBOX);
+        server_B.setImapBindPort(PORT_B);
+
+        MockServiceLocator serviceLocator = new MockServiceLocator();
+        serviceLocator.add(serviceID, HOSTNAME_A, HOSTADDR_A, PORT_A);
+        serviceLocator.add(serviceID, HOSTNAME_B, HOSTADDR_B, PORT_B);
+        handler.setServiceLocator(serviceLocator);
+
+        Account account = createAccount(USER, DEFAULT_DOMAIN);
+        account.setMailHost(server_A.getName());
+
+        // Perform 1st lookup. Sanity check - expect account to be assigned to its original server A
+        NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imap.name());
+        NginxLookupResponse res = new NginxLookupResponse();
+        handler.search(req, res);
+        assertBasic(res, QUSER, HOSTNAME_A, "" + PORT_A);
+
+        // Kill server A (set as unhealthy), from the Service Locator's perspective
+        serviceLocator.setHealthy(serviceID, HOSTNAME_A, false);
+
+        // Perform 2nd lookup. Expect the account to get reassigned to server B
+        req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imap.name());
+        res = new NginxLookupResponse();
+        handler.search(req, res);
+        assertBasic(res, QUSER, HOSTNAME_B, "" + PORT_B);
+    }
+
     @Test
     public void imapssl() throws Exception {
-        getOrCreateAccount(USER, DEFAULT_DOMAIN);
+        createAccount(USER, DEFAULT_DOMAIN);
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imapssl.name());
         NginxLookupResponse res = new NginxLookupResponse();
         handler.search(req, res);
@@ -281,7 +334,7 @@ public class NginxLookupHandlerTest {
 
     @Test
     public void pop3() throws Exception {
-        getOrCreateAccount(USER, DEFAULT_DOMAIN);
+        createAccount(USER, DEFAULT_DOMAIN);
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3.name());
         NginxLookupResponse res = new NginxLookupResponse();
         handler.search(req, res);
@@ -290,7 +343,7 @@ public class NginxLookupHandlerTest {
 
     @Test
     public void pop3ssl() throws Exception {
-        getOrCreateAccount(USER, DEFAULT_DOMAIN);
+        createAccount(USER, DEFAULT_DOMAIN);
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.pop3ssl.name());
         NginxLookupResponse res = new NginxLookupResponse();
         handler.search(req, res);
@@ -299,7 +352,7 @@ public class NginxLookupHandlerTest {
 
     @Test
     public void http() throws Exception {
-        getOrCreateAccount(USER, DEFAULT_DOMAIN);
+        createAccount(USER, DEFAULT_DOMAIN);
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.http.name());
         NginxLookupResponse res = new NginxLookupResponse();
         handler.search(req, res);
@@ -312,7 +365,7 @@ public class NginxLookupHandlerTest {
         String domainName = getDomainName("account.account.externalroute");
         String quser = user + "@" + domainName;
 
-        Account acct = getOrCreateAccount(user, domainName);
+        Account acct = createAccount(user, domainName);
         Domain domain = getDomain(domainName);
 
         setupExternalRoute(acct, true, "1", "2", "3", "4");
@@ -347,7 +400,7 @@ public class NginxLookupHandlerTest {
         String domainName = getDomainName("account.domain.externalroute");
         String quser = user + "@" + domainName;
 
-        Account acct = getOrCreateAccount(user, domainName);
+        Account acct = createAccount(user, domainName);
         setupExternalRoute(acct, true, "", "", "", "");
 
         Domain domain = getDomain(domainName);
@@ -383,7 +436,7 @@ public class NginxLookupHandlerTest {
         String domainName = getDomainName("domain.account.externalroute");
         String quser = user + "@" + domainName;
 
-        Account acct = getOrCreateAccount(user, domainName);
+        Account acct = createAccount(user, domainName);
         setupExternalRoute(acct, null, "1", "2", "3", "4");
 
         Domain domain = getDomain(domainName);
@@ -419,7 +472,7 @@ public class NginxLookupHandlerTest {
         String domainName = getDomainName("domain.domain.externalroute");
         String quser = user + "@" + domainName;
 
-        Account acct = getOrCreateAccount(user, domainName);
+        Account acct = createAccount(user, domainName);
         setupExternalRoute(acct, null, "", "", "", "");
 
         Domain domain = getDomain(domainName);

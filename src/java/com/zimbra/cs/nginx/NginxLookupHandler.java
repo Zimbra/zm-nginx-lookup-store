@@ -213,7 +213,7 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
             return attrs.toArray(new String[attrs.size()]);
         }
 
-        protected String getServiceIDForProto(String proto) {
+        protected static String getServiceIDForProto(String proto) {
             if ("http".equals(proto)) {
                 return "zimbra:web";
             } else if ("imap".equals(proto)) {
@@ -1014,21 +1014,38 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                         mailhost = null;
                         port = null;
                     } else
-                        ZimbraLog.nginxlookup.debug("external route for user " + authUserWithRealDomainName + ", host=" + mailhost + ", port =" + port);
+                        ZimbraLog.nginxlookup.debug("External route for user=%s, host=%s, port=%s", authUserWithRealDomainName, mailhost, port);
                 }
 
                 // use internal route
 
-                // when an account-to-mailstore association already exists in LDAP
-                if (mailhost == null && !acct.isAccountExternal()) {
+                // When an account is already assigned a server in LDAP.
+                if (mailhost == null && (acct == null || acct.getServer() != null)) {
                     mailhost = vals.get(Provisioning.A_zimbraReverseProxyMailHostAttribute);
                 }
 
-                // when no account-to-mailstore association exists in LDAP, use Consul to pick a new upstream
-                if (mailhost == null) {
-                    ZimbraLog.nginxlookup.debug("no mailhost found for user: " + req.user + ", performing Service Locator lookup to assign a new upstream");
+                // If an account is already assigned a server in LDAP, then nginx
+                // would have ordinarily received a memcached cache hit. So we're here either because the
+                // cache is warming up, or because nginx detected that the account's usual upstream is dead.
+                // So in all cases we'll query the service locator to ensure the assigned mailstore is healthy right now.
+                if (mailhost != null && (acct == null || acct.getServer() != null)) {
                     String serviceID = getServiceIDForProto(req.proto);
-                    List<Triple<String,String,Integer>> list = serviceLocator.find(serviceID, true);
+                    try {
+                        boolean healthy = serviceLocator.isHealthy(serviceID, mailhost);
+                        if (!healthy) {
+                            ZimbraLog.nginxlookup.warn("mailstore %s is not healthy for user %s; reassigning", mailhost, authUserWithRealDomainName);
+                            mailhost = null;
+                        }
+                    } catch (ServiceException e) {
+                        ZimbraLog.nginxlookup.warn("Could not determine whether mailstore %s is healthy for user %s; skipping any potential mailstore reassignment", mailhost, authUserWithRealDomainName);
+                    }
+                }
+
+                // When an account is not assigned a server in LDAP, use Consul to pick one
+                if (mailhost == null) {
+                    ZimbraLog.nginxlookup.debug("No mailhost found for user: %s; using Service Locator to select a new upstream", req.user);
+                    String serviceID = getServiceIDForProto(req.proto);
+                    List<ServiceLocator.Entry> list = serviceLocator.find(serviceID, true);
                     Triple<String,String,Integer> serviceInfo = null;
                     if (list.size() == 1) {
                         serviceInfo = list.get(0);
@@ -1040,9 +1057,9 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                         mailhost = list.get(0).getFirst();
                         port = Integer.toString(list.get(0).getThird());
 
-                        // save the new server association
+                        // permanently assign the account to the newly selected server
                         acct.setMailHost(mailhost);
-                        ZimbraLog.nginxlookup.info("User: " + req.user + " now assigned to mailhost: " + mailhost);
+                        ZimbraLog.nginxlookup.info("User: %s is now assigned to mailhost: %s", req.user, mailhost);
                     }
                 }
 
