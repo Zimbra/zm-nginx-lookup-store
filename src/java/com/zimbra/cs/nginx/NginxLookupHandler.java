@@ -214,7 +214,7 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
         }
 
         protected static String getServiceIDForProto(String proto) {
-            if ("http".equals(proto)) {
+            if ("http".equals(proto) || "httpssl".equals(proto)) {
                 return "zimbra:web";
             } else if ("imap".equals(proto)) {
                 return "zimbra:ImapServer";
@@ -1028,8 +1028,8 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                 // would have ordinarily received a memcached cache hit. So we're here either because the
                 // cache is warming up, or because nginx detected that the account's usual upstream is dead.
                 // So in all cases we'll query the service locator to ensure the assigned mailstore is healthy right now.
+                String serviceID = getServiceIDForProto(req.proto);
                 if (mailhost != null && (acct == null || acct.getServer() != null)) {
-                    String serviceID = getServiceIDForProto(req.proto);
                     try {
                         boolean healthy = serviceLocator.isHealthy(serviceID, mailhost);
                         if (!healthy) {
@@ -1037,14 +1037,13 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                             mailhost = null;
                         }
                     } catch (ServiceException e) {
-                        ZimbraLog.nginxlookup.warn("Could not determine whether mailstore %s is healthy for user %s; skipping any potential mailstore reassignment", mailhost, authUserWithRealDomainName);
+                        ZimbraLog.nginxlookup.warn("Could not determine whether mailstore %s is healthy for user %s via service id %s for protocol %s; skipping any potential mailstore reassignment", mailhost, authUserWithRealDomainName, serviceID, req.proto, e);
                     }
                 }
 
                 // When an account is not assigned a server in LDAP, use Consul to pick one
                 if (mailhost == null) {
                     ZimbraLog.nginxlookup.debug("No mailhost found for user: %s; using Service Locator to select a new upstream", req.user);
-                    String serviceID = getServiceIDForProto(req.proto);
                     List<ServiceLocator.Entry> list = serviceLocator.find(serviceID, true);
                     Triple<String,String,Integer> serviceInfo = null;
                     if (list.size() == 1) {
