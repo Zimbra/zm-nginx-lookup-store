@@ -108,13 +108,13 @@ public class NginxLookupHandlerTest {
 
     @Before
     public void before() throws Exception {
+        Assume.assumeTrue(isLdapServerAvailableForTests());
         Zimbra.startupTest();
         prov = LdapProvisioning.getInst();
         handler = new NginxLookupHandler(prov);
         prov.getConfig().setDefaultDomainName(DEFAULT_DOMAIN);
 
         Assume.assumeTrue(isServiceLocatorAvailableForTests());
-        Assume.assumeTrue(isLdapServerAvailableForTests());
 
         // All the tests by default don't depend on DNS lookups
         Map<String, Object> attrs = new HashMap<String, Object>();
