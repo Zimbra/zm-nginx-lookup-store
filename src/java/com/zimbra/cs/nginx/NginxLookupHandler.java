@@ -7,6 +7,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -218,11 +219,11 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                 return "zimbra:web";
             } else if ("imap".equals(proto)) {
                 return "zimbra:ImapServer";
-            } else if ("imaps".equals(proto)) {
+            } else if ("imapssl".equals(proto)) {
                 return "zimbra:ImapSSLServer";
-            } else if ("pop".equals(proto)) {
+            } else if ("pop3".equals(proto)) {
                 return "zimbra:Pop3Server";
-            } else if ("pops".equals(proto)) {
+            } else if ("pop3ssl".equals(proto)) {
                 return "zimbra:Pop3SSLServer";
             } else {
                 return null;
@@ -1030,21 +1031,29 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                 // So in all cases we'll query the service locator to ensure the assigned mailstore is healthy right now.
                 String serviceID = getServiceIDForProto(req.proto);
                 if (mailhost != null && (acct == null || acct.getServer() != null)) {
+                    boolean healthy = true;
                     try {
-                        boolean healthy = serviceLocator.isHealthy(serviceID, mailhost);
-                        if (!healthy) {
-                            ZimbraLog.nginxlookup.warn("mailstore %s is not healthy for user %s; reassigning", mailhost, authUserWithRealDomainName);
-                            mailhost = null;
-                        }
+                        healthy = serviceLocator.isHealthy(serviceID, mailhost);
+                    } catch (IOException e) {
+                        ZimbraLog.nginxlookup.warn("Could not reach service locator to determine whether mailstore %s is healthy for user %s via service id %s for protocol %s; skipping any potential mailstore reassignment", mailhost, authUserWithRealDomainName, serviceID, req.proto, e);
                     } catch (ServiceException e) {
-                        ZimbraLog.nginxlookup.warn("Could not determine whether mailstore %s is healthy for user %s via service id %s for protocol %s; skipping any potential mailstore reassignment", mailhost, authUserWithRealDomainName, serviceID, req.proto, e);
+                    }
+                    if (!healthy) {
+                        ZimbraLog.nginxlookup.warn("mailstore %s is not healthy for user %s; reassigning", mailhost, authUserWithRealDomainName);
+                        mailhost = null;
                     }
                 }
 
                 // When an account is not assigned a server in LDAP, use Consul to pick one
                 if (mailhost == null) {
                     ZimbraLog.nginxlookup.debug("No mailhost found for user: %s; using Service Locator to select a new upstream", req.user);
-                    List<ServiceLocator.Entry> list = serviceLocator.find(serviceID, true);
+                    List<ServiceLocator.Entry> list;
+                    try {
+                        list = serviceLocator.find(serviceID, true);
+                    } catch (IOException e) {
+                        ZimbraLog.nginxlookup.warn("Could not reach service locator to select a new mailstore for user %s and service id %s for protocol %s; skipping mailstore assignment", authUserWithRealDomainName, serviceID, req.proto, e);
+                        list = Collections.emptyList();
+                    }
                     Triple<String,String,Integer> serviceInfo = null;
                     if (list.size() == 1) {
                         serviceInfo = list.get(0);
