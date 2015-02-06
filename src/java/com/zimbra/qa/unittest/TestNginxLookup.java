@@ -37,7 +37,9 @@ import org.junit.Test;
 import com.zimbra.common.account.Key;
 import com.zimbra.common.account.Key.AccountBy;
 import com.zimbra.common.account.ProvisioningConstants;
+import com.zimbra.common.localconfig.DebugConfig;
 import com.zimbra.common.soap.AdminConstants;
+import com.zimbra.common.util.ZimbraLog;
 import com.zimbra.cs.account.Account;
 import com.zimbra.cs.account.Config;
 import com.zimbra.cs.account.Domain;
@@ -208,7 +210,7 @@ public class TestNginxLookup extends TestCase {
         SYSTEM_DEFAULT_DOMAIN = mSoapProv.getConfig().getAttr(Provisioning.A_zimbraDefaultDomainName);
         ACCT_EMAIL = ACCT_LOCALPART + "@" + DOMAIN;
         ACCT1_EMAIL = ACCT_LOCALPART + "@" + SYSTEM_DEFAULT_DOMAIN;
-        ACCT2_EMAIL = ACCT2_LOCALPART + "@" + SYSTEM_DEFAULT_DOMAIN;
+        ACCT2_EMAIL = (ACCT2_LOCALPART + "@" + SYSTEM_DEFAULT_DOMAIN).toLowerCase();
 
         // create the domain
         Map<String, Object> domainAttrs = new HashMap<String, Object>();
@@ -255,19 +257,26 @@ public class TestNginxLookup extends TestCase {
             mSoapProv.modifyAttrs(acct2, acctAttrs);
         }
         accountsToCleanup.add(acct2);
+
+        DebugConfig.setNginxLookupServerReassignOnHealthCheckEnabled(false);
     }
 
     @Override
     public void tearDown() throws Exception {
+        DebugConfig.setNginxLookupServerReassignOnHealthCheckEnabled(true);
         for (Account acct: accountsToCleanup) {
             try {
                 mSoapProv.deleteAccount(acct.getId());
-            } catch (Exception e) {}
+            } catch (Exception e) {
+                ZimbraLog.test.warn("Failed deleting test account %s", acct.getName(), e);
+            }
         }
         for (Domain domain: domainsToCleanup) {
             try {
                 TestLdap.deleteEntireBranch(domain.getName());
-            } catch (Exception e) {}
+            } catch (Exception e) {
+                ZimbraLog.test.warn("Failed deleting test domain %s", domain.getName(), e);
+            }
         }
     }
 

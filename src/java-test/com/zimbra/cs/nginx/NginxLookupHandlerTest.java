@@ -23,7 +23,6 @@ import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
-import java.util.UUID;
 
 import junit.framework.Assert;
 
@@ -37,6 +36,7 @@ import com.unboundid.ldap.sdk.LDAPConnection;
 import com.unboundid.ldap.sdk.LDAPConnectionOptions;
 import com.zimbra.common.account.Key;
 import com.zimbra.common.account.ProvisioningConstants;
+import com.zimbra.common.localconfig.DebugConfig;
 import com.zimbra.common.service.ServiceException;
 import com.zimbra.cs.account.Account;
 import com.zimbra.cs.account.Domain;
@@ -120,10 +120,12 @@ public class NginxLookupHandlerTest {
         Map<String, Object> attrs = new HashMap<String, Object>();
         attrs.put(Provisioning.A_zimbraReverseProxyDnsLookupInServerEnabled, ProvisioningConstants.FALSE);
         prov.getLocalServer().modify(attrs);
+        DebugConfig.setNginxLookupServerReassignOnHealthCheckEnabled(false);
     }
 
     @After
     public void after() throws Exception {
+        DebugConfig.setNginxLookupServerReassignOnHealthCheckEnabled(true);
         if (prov != null) {
             Account account = prov.getAccountByName(QUSER);
             if (account != null) {
@@ -317,6 +319,9 @@ public class NginxLookupHandlerTest {
 
         Account account = createAccount(USER, DEFAULT_DOMAIN);
         account.setMailHost(server_A.getName());
+
+        // Server reassign is disabled for all tests by default, except this one.
+        DebugConfig.setNginxLookupServerReassignOnHealthCheckEnabled(true);
 
         // Perform 1st lookup. Sanity check - expect account to be assigned to its original server A
         NginxLookupRequest req = new NginxLookupRequest(USER, PASSWORD, AuthMethod.plain.name(), AuthProtocol.imap.name());
