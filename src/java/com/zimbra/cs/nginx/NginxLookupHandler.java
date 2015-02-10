@@ -19,6 +19,7 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.net.util.SubnetUtils;
 import org.apache.commons.net.util.SubnetUtils.SubnetInfo;
 
@@ -216,8 +217,10 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
         }
 
         protected static String getServiceIDForProto(String proto) {
-            if ("http".equals(proto) || "httpssl".equals(proto)) {
+            if ("http".equals(proto)) {
                 return "zimbra:web";
+            } else if ("httpssl".equals(proto)) {
+                return "zimbra:webssl";
             } else if ("imap".equals(proto)) {
                 return "zimbra:ImapServer";
             } else if ("imapssl".equals(proto)) {
