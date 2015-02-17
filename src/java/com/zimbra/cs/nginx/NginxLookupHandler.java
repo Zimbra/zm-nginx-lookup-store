@@ -218,9 +218,9 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
 
         protected static String getServiceIDForProto(String proto) {
             if ("http".equals(proto)) {
-                return "zimbra:web";
+                return "zimbra:mailstore:soap";
             } else if ("httpssl".equals(proto)) {
-                return "zimbra:webssl";
+                return "zimbra:mailstore:soap";
             } else if ("imap".equals(proto)) {
                 return "zimbra:ImapServer";
             } else if ("imapssl".equals(proto)) {
