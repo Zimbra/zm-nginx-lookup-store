@@ -1034,9 +1034,10 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                 // cache is warming up, or because nginx detected that the account's usual upstream is dead.
                 // So in all cases we'll query the service locator to ensure the assigned mailstore is healthy right now.
                 String serviceID = getServiceIDForProto(req.proto);
-                boolean checkUpstreamHealth = mailhost != null
+                boolean checkUpstreamHealth = DebugConfig.isNginxLookupServerReassignOnHealthCheckEnabled()
+                        && mailhost != null
                         && (acct == null || !acct.isAccountExternal())
-                        && DebugConfig.isNginxLookupServerReassignOnHealthCheckEnabled();
+                        && (acct == null || acct.getClusterId() != null);
                 if (checkUpstreamHealth) {
                     boolean healthy = true;
                     try {
