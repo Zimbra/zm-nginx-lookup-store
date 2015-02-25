@@ -109,7 +109,7 @@ public class NginxLookupHandlerTest {
     @Before
     public void before() throws Exception {
         Assume.assumeTrue(isLdapServerAvailableForTests());
-        Zimbra.startupTest();
+        Zimbra.startupMinimal();
         prov = LdapProvisioning.getInst();
         handler = new NginxLookupHandler(prov);
         prov.getConfig().setDefaultDomainName(DEFAULT_DOMAIN);
