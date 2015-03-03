@@ -35,10 +35,12 @@ import org.junit.Test;
 import com.unboundid.ldap.sdk.LDAPConnection;
 import com.unboundid.ldap.sdk.LDAPConnectionOptions;
 import com.zimbra.common.account.Key;
+import com.zimbra.common.account.Key.AlwaysOnClusterBy;
 import com.zimbra.common.account.ProvisioningConstants;
 import com.zimbra.common.localconfig.DebugConfig;
 import com.zimbra.common.service.ServiceException;
 import com.zimbra.cs.account.Account;
+import com.zimbra.cs.account.AlwaysOnCluster;
 import com.zimbra.cs.account.Domain;
 import com.zimbra.cs.account.Provisioning;
 import com.zimbra.cs.account.Provisioning.MailMode;
@@ -63,6 +65,7 @@ public class NginxLookupHandlerTest {
     private static final String HTTP_PORT     = "7070";
     private LdapProv prov;
     private NginxLookupHandler handler;
+    private AlwaysOnCluster cluster; // if this gets assigned, delete in after-test cleanup
 
     private enum AuthMethod {
         plain,
@@ -130,6 +133,10 @@ public class NginxLookupHandlerTest {
             Account account = prov.getAccountByName(QUSER);
             if (account != null) {
                 prov.deleteAccount(account.getId());
+            }
+            if (cluster != null) {
+                prov.deleteAlwaysOnCluster(cluster.getId());
+                cluster = null;
             }
         }
     }
@@ -205,6 +212,14 @@ public class NginxLookupHandlerTest {
 
     private Server getServer(String name) throws ServiceException {
         return prov.get(Key.ServerBy.name, name);
+    }
+
+    private AlwaysOnCluster getOrCreateCluster(String clusterName) throws ServiceException {
+        AlwaysOnCluster cluster = prov.get(AlwaysOnClusterBy.name, clusterName);
+        if (cluster == null) {
+            cluster = prov.createAlwaysOnCluster(clusterName, new HashMap<>());
+        }
+        return cluster;
     }
 
     private Server getOrCreateServer(String serverName) throws ServiceException {
@@ -304,13 +319,17 @@ public class NginxLookupHandlerTest {
         final int PORT_B = PORT_A + 1;
         final String serviceID = NginxLookupHandler.getServiceIDForProto(AuthProtocol.imap.name());
 
+        cluster = getOrCreateCluster(getClass().getName());
+
         Server server_A = getOrCreateServer(HOSTNAME_A);
         server_A.addServiceEnabled(Provisioning.SERVICE_MAILBOX);
         server_A.setImapBindPort(PORT_A);
+        server_A.setAlwaysOnClusterId(cluster.getId());
 
         Server server_B = getOrCreateServer(HOSTNAME_B);
         server_B.addServiceEnabled(Provisioning.SERVICE_MAILBOX);
         server_B.setImapBindPort(PORT_B);
+        server_A.setAlwaysOnClusterId(cluster.getId());
 
         MockServiceLocator serviceLocator = new MockServiceLocator();
         serviceLocator.add(serviceID, HOSTNAME_A, HOSTADDR_A, PORT_A);
