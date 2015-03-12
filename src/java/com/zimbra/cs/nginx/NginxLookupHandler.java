@@ -19,7 +19,6 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import org.apache.commons.lang.StringUtils;
 import org.apache.commons.net.util.SubnetUtils;
 import org.apache.commons.net.util.SubnetUtils.SubnetInfo;
 
@@ -32,7 +31,6 @@ import com.zimbra.common.localconfig.DebugConfig;
 import com.zimbra.common.localconfig.LC;
 import com.zimbra.common.service.ServiceException;
 import com.zimbra.common.util.StringUtil;
-import com.zimbra.common.util.Triple;
 import com.zimbra.common.util.ZimbraLog;
 import com.zimbra.cs.account.AccessManager;
 import com.zimbra.cs.account.Account;
@@ -45,6 +43,7 @@ import com.zimbra.cs.account.auth.AuthContext;
 import com.zimbra.cs.account.auth.AuthMechanism;
 import com.zimbra.cs.account.ldap.LdapProv;
 import com.zimbra.cs.consul.ServiceLocator;
+import com.zimbra.cs.consul.ZimbraServiceNames;
 import com.zimbra.cs.extension.ExtensionException;
 import com.zimbra.cs.extension.ExtensionHttpHandler;
 import com.zimbra.cs.extension.ZimbraExtension;
@@ -218,17 +217,17 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
 
         protected static String getServiceIDForProto(String proto) {
             if ("http".equals(proto)) {
-                return "zimbra-mailstore";
+                return ZimbraServiceNames.MAILSTORE;
             } else if ("httpssl".equals(proto)) {
-                return "zimbra-mailstore";
+                return ZimbraServiceNames.MAILSTORE;
             } else if ("imap".equals(proto)) {
-                return "zimbra-imap";
+                return ZimbraServiceNames.IMAP;
             } else if ("imapssl".equals(proto)) {
-                return "zimbra-imap";
+                return ZimbraServiceNames.IMAP;
             } else if ("pop3".equals(proto)) {
-                return "zimbra-pop3";
+                return ZimbraServiceNames.POP;
             } else if ("pop3ssl".equals(proto)) {
-                return "zimbra-pop3";
+                return ZimbraServiceNames.POP;
             } else {
                 return null;
             }
@@ -1063,7 +1062,7 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                         ZimbraLog.nginxlookup.warn("Could not reach service locator to select a new mailstore for user %s and service id %s for protocol %s; skipping mailstore assignment", authUserWithRealDomainName, serviceID, req.proto, e);
                         list = Collections.emptyList();
                     }
-                    Triple<String,String,Integer> serviceInfo = null;
+                    ServiceLocator.Entry serviceInfo = null;
                     if (list.size() == 1) {
                         serviceInfo = list.get(0);
                     } else if (list.size() > 1) {
@@ -1071,8 +1070,8 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                         serviceInfo = list.get(pickOne);
                     }
                     if (serviceInfo != null) {
-                        mailhost = list.get(0).getFirst();
-                        port = Integer.toString(list.get(0).getThird());
+                        mailhost = serviceInfo.hostName;
+                        port = Integer.toString(serviceInfo.servicePort);
 
                         // permanently assign the account to the newly selected server
                         acct.setMailHost(mailhost);
