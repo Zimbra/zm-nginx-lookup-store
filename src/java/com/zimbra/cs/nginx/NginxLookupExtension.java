@@ -888,29 +888,31 @@ public class NginxLookupExtension implements ZimbraExtension {
                 } else {
                     acct = prov.get(AccountBy.name, authUser);
                 }
-                Domain userdomain = prov.getDomain(acct);
-                if (userdomain == null)
-                    throw new EntryNotFoundException("domain not found for user:" + authUser);
-                String[] DomainAllowedIPs = userdomain
-                        .getMultiAttr(Provisioning.A_zimbraDomainAllowedIPs);
-                ZimbraLog.nginxlookup.debug("Domain name is " + userdomain.getName() + " & DomainAllowedIPs list is " + Arrays.asList(DomainAllowedIPs));
+                if (acct != null) {
+                    Domain userdomain = prov.getDomain(acct);
+                    if (userdomain == null)
+                        throw new EntryNotFoundException("domain not found for user:" + authUser);
+                    String[] DomainAllowedIPs = userdomain
+                            .getMultiAttr(Provisioning.A_zimbraDomainAllowedIPs);
+                    ZimbraLog.nginxlookup.debug("Domain name is " + userdomain.getName() + " & DomainAllowedIPs list is " + Arrays.asList(DomainAllowedIPs));
 
-                int i = 0;
-                for (; i < DomainAllowedIPs.length; i++) {
-                    // Check if each entry in DomainAllowedIPs is an IP subnet (in CIDR notation eg.x.x.x.y/24) or just a single IP (eg. x.x.x.y)
-                    String ipaddr = DomainAllowedIPs[i];
-                    if (ipaddr.indexOf("/") == -1) {
-                        if (ipaddr.equals(req.clientIp))
-                            break;
-                    } else {
-                        SubnetUtils utils = new SubnetUtils(ipaddr);
-                        SubnetInfo info = utils.getInfo();
-                        if (info.isInRange(req.clientIp))
-                            break;
+                    int i = 0;
+                    for (; i < DomainAllowedIPs.length; i++) {
+                        // Check if each entry in DomainAllowedIPs is an IP subnet (in CIDR notation eg.x.x.x.y/24) or just a single IP (eg. x.x.x.y)
+                        String ipaddr = DomainAllowedIPs[i];
+                        if (ipaddr.indexOf("/") == -1) {
+                            if (ipaddr.equals(req.clientIp))
+                                break;
+                        } else {
+                            SubnetUtils utils = new SubnetUtils(ipaddr);
+                            SubnetInfo info = utils.getInfo();
+                            if (info.isInRange(req.clientIp))
+                                break;
+                        }
                     }
+                    if (DomainAllowedIPs.length > 0 && i == DomainAllowedIPs.length)
+                        throw new NginxLookupException(CLIENT_IP + " " + req.clientIp + " " + ACCESS_DENIED_ERRMSG);
                 }
-                if (DomainAllowedIPs.length > 0 && i == DomainAllowedIPs.length)
-                    throw new NginxLookupException(CLIENT_IP + " " + req.clientIp + " " + ACCESS_DENIED_ERRMSG);
 
                 if (req.authMethod.equalsIgnoreCase(AUTHMETH_CERTAUTH)) {
                 	// for cert auth, no need to find the real route, just
