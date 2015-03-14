@@ -43,16 +43,28 @@ public class MockServiceLocator implements ServiceLocator {
     }
 
     @Override
-    public List<ServiceLocator.Entry> find(String serviceID, boolean healthyOnly) throws IOException, ServiceException {
+    public List<ServiceLocator.Entry> find(String serviceName, boolean healthyOnly) throws IOException, ServiceException {
         List<ServiceLocator.Entry> result = new ArrayList<>();
         for (Record record: services) {
-            if (Objects.equal(serviceID, record.serviceID)) {
+            if (Objects.equal(serviceName, record.serviceID)) {
                 if (healthyOnly == false || (healthyOnly && record.healthy)) {
                     result.add(new ServiceLocator.Entry(record.hostName, record.hostAddress, record.servicePort));
                 }
             }
         }
         return result;
+    }
+
+    @Override
+    public Entry findOne(String serviceName) throws IOException, ServiceException {
+        List<Entry> list = find(serviceName, true);
+        if (list.isEmpty()) {
+            list = find(serviceName, false);
+        }
+        if (list.isEmpty()) {
+            throw ServiceException.NOT_FOUND("No healthy instances of " + serviceName);
+        }
+        return list.get(0);
     }
 
     @Override
