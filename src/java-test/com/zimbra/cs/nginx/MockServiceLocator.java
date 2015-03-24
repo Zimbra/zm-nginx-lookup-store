@@ -25,7 +25,8 @@ import java.util.List;
 import com.google.common.base.Objects;
 import com.zimbra.common.service.ServiceException;
 import com.zimbra.cs.consul.CatalogRegistration;
-import com.zimbra.cs.consul.ServiceLocator;
+import com.zimbra.cs.servicelocator.Selector;
+import com.zimbra.cs.servicelocator.ServiceLocator;
 
 public class MockServiceLocator implements ServiceLocator {
     List<Record> services = new ArrayList<>();

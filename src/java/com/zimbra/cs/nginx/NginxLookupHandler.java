@@ -34,8 +34,6 @@ import com.zimbra.cs.account.Server;
 import com.zimbra.cs.account.auth.AuthContext;
 import com.zimbra.cs.account.auth.AuthMechanism;
 import com.zimbra.cs.account.ldap.LdapProv;
-import com.zimbra.cs.consul.ServiceLocator;
-import com.zimbra.cs.consul.ZimbraServiceNames;
 import com.zimbra.cs.extension.ExtensionException;
 import com.zimbra.cs.extension.ExtensionHttpHandler;
 import com.zimbra.cs.extension.ZimbraExtension;
@@ -50,6 +48,9 @@ import com.zimbra.cs.nginx.NginxLookupExtension.NginxLookupRequest;
 import com.zimbra.cs.nginx.NginxLookupExtension.NginxLookupResponse;
 import com.zimbra.cs.service.AuthProvider;
 import com.zimbra.cs.service.authenticator.ClientCertAuthenticator;
+import com.zimbra.cs.servicelocator.Selector;
+import com.zimbra.cs.servicelocator.ServiceLocator;
+import com.zimbra.cs.servicelocator.ZimbraServiceNames;
 import com.zimbra.cs.util.IPUtil;
 import com.zimbra.cs.util.Zimbra;
 
@@ -1050,7 +1051,7 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                     ZimbraLog.nginxlookup.debug("No mailhost found for user %s; using service locator to select a new upstream", req.user);
                     ServiceLocator.Entry serviceInfo = null;
                     try {
-                        ServiceLocator.Selector selector = Zimbra.getAppContext().getBean(ServiceLocator.Selector.class);
+                        Selector selector = Zimbra.getAppContext().getBean(Selector.class);
                         serviceInfo = serviceLocator.findOne(serviceID, selector, true);
                     } catch (IOException e) {
                         ZimbraLog.nginxlookup.warn("Could not reach service locator to select a new mailstore for user %s and service id %s for protocol %s; skipping mailstore assignment", authUserWithRealDomainName, serviceID, req.proto, e);
