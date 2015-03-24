@@ -4,12 +4,9 @@ import java.io.IOException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
 
 import javax.servlet.ServletException;
@@ -1051,19 +1048,12 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                 // When an account is not assigned a server in LDAP, use the service locator to pick one
                 if (acct != null && mailhost == null) {
                     ZimbraLog.nginxlookup.debug("No mailhost found for user %s; using service locator to select a new upstream", req.user);
-                    List<ServiceLocator.Entry> list;
+                    ServiceLocator.Entry serviceInfo = null;
                     try {
-                        list = serviceLocator.find(serviceID, true);
+                        ServiceLocator.Selector selector = Zimbra.getAppContext().getBean(ServiceLocator.Selector.class);
+                        serviceInfo = serviceLocator.findOne(serviceID, selector, true);
                     } catch (IOException e) {
                         ZimbraLog.nginxlookup.warn("Could not reach service locator to select a new mailstore for user %s and service id %s for protocol %s; skipping mailstore assignment", authUserWithRealDomainName, serviceID, req.proto, e);
-                        list = Collections.emptyList();
-                    }
-                    ServiceLocator.Entry serviceInfo = null;
-                    if (list.size() == 1) {
-                        serviceInfo = list.get(0);
-                    } else if (list.size() > 1) {
-                        int pickOne = new Random().nextInt(list.size() - 1);
-                        serviceInfo = list.get(pickOne);
                     }
                     if (serviceInfo != null) {
                         mailhost = serviceInfo.hostName;
