@@ -23,10 +23,10 @@ import java.util.Iterator;
 import java.util.List;
 
 import com.google.common.base.Objects;
+import com.zimbra.common.consul.CatalogRegistration;
 import com.zimbra.common.service.ServiceException;
-import com.zimbra.cs.consul.CatalogRegistration;
-import com.zimbra.cs.servicelocator.Selector;
-import com.zimbra.cs.servicelocator.ServiceLocator;
+import com.zimbra.common.servicelocator.Selector;
+import com.zimbra.common.servicelocator.ServiceLocator;
 
 public class MockServiceLocator implements ServiceLocator {
     List<Record> services = new ArrayList<>();
