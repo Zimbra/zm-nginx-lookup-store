@@ -44,7 +44,7 @@ public class MockServiceLocator implements ServiceLocator {
     }
 
     @Override
-    public List<ServiceLocator.Entry> find(String serviceName, boolean healthyOnly) throws IOException, ServiceException {
+    public List<ServiceLocator.Entry> find(String serviceName, String tag, boolean healthyOnly) throws IOException, ServiceException {
         List<ServiceLocator.Entry> result = new ArrayList<>();
         for (Record record: services) {
             if (Objects.equal(serviceName, record.serviceID)) {
@@ -57,10 +57,10 @@ public class MockServiceLocator implements ServiceLocator {
     }
 
     @Override
-    public Entry findOne(String serviceName, Selector selector, boolean healthyOnly) throws IOException, ServiceException {
-        List<Entry> list = find(serviceName, true);
+    public Entry findOne(String serviceName, Selector<ServiceLocator.Entry> selector, String tag, boolean healthyOnly) throws IOException, ServiceException {
+        List<Entry> list = find(serviceName, tag, true);
         if (list.isEmpty() && !healthyOnly) {
-            list = find(serviceName, false);
+            list = find(serviceName, tag, false);
         }
         if (list.isEmpty()) {
             throw ServiceException.NOT_FOUND("No healthy instances of " + serviceName);
