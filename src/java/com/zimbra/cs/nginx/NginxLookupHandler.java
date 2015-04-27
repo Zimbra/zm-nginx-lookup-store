@@ -1051,7 +1051,7 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                     ZimbraLog.nginxlookup.debug("No mailhost found for user %s; using service locator to select a new upstream", req.user);
                     ServiceLocator.Entry serviceInfo = null;
                     try {
-                        Selector selector = Zimbra.getAppContext().getBean(Selector.class);
+                        Selector<ServiceLocator.Entry> selector = Zimbra.getAppContext().getBean(Selector.class);
                         serviceInfo = serviceLocator.findOne(serviceID, selector, null, true);
                     } catch (IOException e) {
                         ZimbraLog.nginxlookup.warn("Could not reach service locator to select a new mailstore for user %s and service id %s for protocol %s; skipping mailstore assignment", authUserWithRealDomainName, serviceID, req.proto, e);
