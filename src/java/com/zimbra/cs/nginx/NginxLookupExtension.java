@@ -41,6 +41,7 @@ import com.zimbra.cs.extension.ZimbraExtension;
 import com.zimbra.qa.unittest.TestNginxLookup;
 import com.zimbra.qa.unittest.ZimbraSuite;
 
+@ZimbraExtension.HideFromDefaultPorts
 public class NginxLookupExtension implements ZimbraExtension {
     protected NginxLookupHandler handler;
 

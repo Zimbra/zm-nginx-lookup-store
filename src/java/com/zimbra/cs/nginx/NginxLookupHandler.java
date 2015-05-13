@@ -101,11 +101,6 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
         protected LdapLookup ldapLookup;
         protected ServiceLocator serviceLocator;
 
-        @Override
-        public boolean hideFromDefaultPorts() {
-            return true;
-        }
-
         public NginxLookupHandler() throws ExtensionException {
             try {
                 prov = LdapProv.getInst();
