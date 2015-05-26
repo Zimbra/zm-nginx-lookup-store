@@ -27,7 +27,6 @@ import org.apache.commons.httpclient.methods.GetMethod;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.zimbra.common.account.Key.AccountBy;
-import com.zimbra.common.localconfig.LC;
 import com.zimbra.common.service.ServiceException;
 import com.zimbra.common.util.Constants;
 import com.zimbra.common.util.ZimbraLog;
@@ -35,6 +34,9 @@ import com.zimbra.cs.account.AuthToken;
 import com.zimbra.cs.account.AuthTokenException;
 import com.zimbra.cs.account.CacheExtension;
 import com.zimbra.cs.account.Provisioning;
+import com.zimbra.cs.account.Server;
+import com.zimbra.cs.account.ldap.LdapHelper;
+import com.zimbra.cs.account.ldap.LdapProv;
 import com.zimbra.cs.extension.ExtensionDispatcherServlet;
 import com.zimbra.cs.extension.ExtensionException;
 import com.zimbra.cs.extension.ZimbraExtension;
@@ -47,22 +49,41 @@ public class NginxLookupExtension implements ZimbraExtension {
 
     public static final String NAME = "nginx-lookup";
 
-    static NginxLookupCache<DomainInfo> sDomainNameByVirtualIpCache =
-        new NginxLookupCache<DomainInfo>(
-                LC.ldap_cache_reverseproxylookup_domain_maxsize.intValue(),
-                LC.ldap_cache_reverseproxylookup_domain_maxage.intValue() * Constants.MILLIS_PER_MINUTE);
-
-    static NginxLookupCache<DomainExternalRouteInfo> sDomainExternalRouteByDomainNameCache =
-        new NginxLookupCache<DomainExternalRouteInfo>(
-                LC.ldap_cache_reverseproxylookup_domain_maxsize.intValue(),
-                LC.ldap_cache_reverseproxylookup_domain_maxage.intValue() * Constants.MILLIS_PER_MINUTE);
-
-
-    static NginxLookupCache<ServerInfo> sServerCache =
-        new NginxLookupCache<ServerInfo>(
-                LC.ldap_cache_reverseproxylookup_server_maxsize.intValue(),
-                LC.ldap_cache_reverseproxylookup_server_maxage.intValue() * Constants.MILLIS_PER_MINUTE);
-
+    static NginxLookupCache<DomainInfo> sDomainNameByVirtualIpCache;
+    static NginxLookupCache<DomainExternalRouteInfo> sDomainExternalRouteByDomainNameCache;
+    static NginxLookupCache<ServerInfo> sServerCache;
+    static {
+        int domainMaxSize;
+        long domainMaxAge;
+        int serverMaxSize;
+        long serverMaxAge;
+        NginxLookupCache.FreshnessChecker freshChecker = null;
+        try {
+            Provisioning myProv = Provisioning.getInstance();
+            Server svr = Provisioning.getInstance().getLocalServer();
+            domainMaxSize = svr.getLdapCacheReverseProxyLookupDomainMaxSize();
+            domainMaxAge = svr.getLdapCacheReverseProxyLookupDomainMaxAge();
+            serverMaxSize = svr.getLdapCacheReverseProxyLookupServerMaxSize();
+            serverMaxAge = svr.getLdapCacheReverseProxyLookupServerMaxAge();
+            if (myProv instanceof LdapProv) {
+                LdapHelper helper = ((LdapProv)myProv).getHelper();
+                freshChecker = new NginxLookupCache.FreshnessChecker(helper);
+                ZimbraLog.ldap.debug("ReverseProxyLookupCache setup using defaults with freshness check");
+            } else {
+                ZimbraLog.ldap.debug("ReverseProxyLookupCache setup using defaults without freshness check");
+            }
+        } catch (ServiceException e) {
+            domainMaxSize = 100;
+            domainMaxAge = 15 * Constants.MILLIS_PER_MINUTE;
+            serverMaxSize = 100;
+            serverMaxAge = 15 * Constants.MILLIS_PER_MINUTE;
+            ZimbraLog.ldap.debug("ReverseProxyLookupCache setup using defaults");
+        }
+        sDomainNameByVirtualIpCache = new NginxLookupCache<DomainInfo>(domainMaxSize, domainMaxAge, freshChecker);
+        sDomainExternalRouteByDomainNameCache =
+                new NginxLookupCache<DomainExternalRouteInfo>(domainMaxSize, domainMaxAge, freshChecker);
+        sServerCache = new NginxLookupCache<ServerInfo>(serverMaxSize, serverMaxAge, freshChecker);
+    }
 
     @Override
     public String getName() {

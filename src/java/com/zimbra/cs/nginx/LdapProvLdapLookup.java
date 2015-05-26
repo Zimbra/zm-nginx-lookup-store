@@ -34,11 +34,11 @@ import com.zimbra.cs.ldap.ZAttributes;
 import com.zimbra.cs.ldap.ZLdapContext;
 import com.zimbra.cs.ldap.ZLdapFilter;
 import com.zimbra.cs.ldap.ZLdapFilterFactory;
+import com.zimbra.cs.ldap.ZLdapFilterFactory.FilterId;
 import com.zimbra.cs.ldap.ZSearchControls;
 import com.zimbra.cs.ldap.ZSearchResultEntry;
 import com.zimbra.cs.ldap.ZSearchResultEnumeration;
 import com.zimbra.cs.ldap.ZSearchScope;
-import com.zimbra.cs.ldap.ZLdapFilterFactory.FilterId;
 import com.zimbra.cs.nginx.NginxLookupExtension.EntryNotFoundException;
 import com.zimbra.cs.nginx.NginxLookupExtension.NginxLookupException;
 
@@ -62,20 +62,18 @@ public class LdapProvLdapLookup implements LdapLookup {
     }
 
     @Override
-    public Map<String, Object> searchDir(ILdapContext ldapContext, String[] returnAttrs,
+    public SearchDirMatch searchDirForEntry(ILdapContext ldapContext, String[] returnAttrs,
             Config config, ZLdapFilter filter, String searchBaseConfigAttr)
     throws NginxLookupException {
 
         ZLdapContext zlc = LdapClient.toZLdapContext(prov, ldapContext);
-
-        Map<String, Object> attrs = null;
-
         String base  = config.getAttr(searchBaseConfigAttr);
         if (base == null) {
             base = LdapConstants.DN_ROOT_DSE;
         }
 
-        ZSearchControls searchControls = ZSearchControls.createSearchControls(ZSearchScope.SEARCH_SCOPE_SUBTREE, 1, returnAttrs);
+        ZSearchControls searchControls =
+                ZSearchControls.createSearchControls(ZSearchScope.SEARCH_SCOPE_SUBTREE, 1, returnAttrs);
 
         try {
             ZSearchResultEnumeration ne = zlc.searchDir(base, filter, searchControls);
@@ -84,16 +82,13 @@ public class LdapProvLdapLookup implements LdapLookup {
                     throw new NginxLookupException("query returned empty result: " + filter.toFilterString());
                 }
                 ZSearchResultEntry sr = ne.next();
-                ZAttributes ldapAttrs = sr.getAttributes();
-                attrs = ldapAttrs.getAttrs();
+                return new SearchDirMatch(sr.getDN(), sr.getAttributes());
             } finally {
                 ne.close();
             }
         } catch (ServiceException e) {
             throw new NginxLookupException("unable to search LDAP", e);
         }
-
-        return attrs;
     }
 
     @Override
@@ -109,56 +104,59 @@ public class LdapProvLdapLookup implements LdapLookup {
 
         String query = config.getAttr(queryTemplate);
         String base  = config.getAttr(searchBase);
-        if (query == null)
-            throw new NginxLookupException("empty attribute: "+queryTemplate);
+        if (query == null) {
+            throw new NginxLookupException("empty attribute: " + queryTemplate);
+        }
 
-        ZimbraLog.nginxlookup.debug("query template attr=" + queryTemplate + ", query template=" + query);
+        ZimbraLog.nginxlookup.debug("query template attr=%s, query template=%s", queryTemplate, query);
         query = StringUtil.fillTemplate(query, kv);
-        ZimbraLog.nginxlookup.debug("query=" + query);
+        ZimbraLog.nginxlookup.debug("query=%s", query);
 
         if (base == null) {
             base = LdapConstants.DN_ROOT_DSE;
         }
 
-        ZSearchControls searchControls = ZSearchControls.createSearchControls(ZSearchScope.SEARCH_SCOPE_SUBTREE, 1, returnAttrs);
+        ZSearchControls searchControls = ZSearchControls.createSearchControls(
+                ZSearchScope.SEARCH_SCOPE_SUBTREE, 1, returnAttrs);
 
-        SearchDirResult sdr = new SearchDirResult();
         try {
-            ZSearchResultEnumeration ne = zlc.searchDir(base, ZLdapFilterFactory.getInstance().fromFilterString(filterId, query), searchControls);
+            ZSearchResultEnumeration ne = zlc.searchDir(base,
+                    ZLdapFilterFactory.getInstance().fromFilterString(filterId, query), searchControls);
             try {
-                if (!ne.hasMore())
-                    throw new EntryNotFoundException("query returned empty result: "+query);
+                if (!ne.hasMore()) {
+                    throw new EntryNotFoundException("query returned empty result: " + query);
+                }
                 ZSearchResultEntry sr = ne.next();
+                ZAttributes ldapAttrs = sr.getAttributes();
 
-                sdr.configuredAttrs = new HashMap<String, String>();
-                lookupAttrs(sdr.configuredAttrs, config, sr, attrs);
+                SearchDirResult sdr = new SearchDirResult(sr.getDN(), ldapAttrs.getEntryCSN());
+                lookupAttrs(sdr, config, sr, attrs);
 
-                sdr.extraAttrs = new HashMap<String, String>();
                 if (extraAttrs != null) {
-                    ZAttributes ldapAttrs = sr.getAttributes();
                     for (String attr : extraAttrs) {
                         String val = ldapAttrs.getAttrString(attr);
-                        if (val != null)
-                            sdr.extraAttrs.put(attr, val);
+                        if (val != null) {
+                            sdr.addExtraAttr(attr, val);
+                        }
                     }
                 }
+                return sdr;
             } finally {
                 ne.close();
             }
         } catch (ServiceException e) {
             throw new NginxLookupException("unable to search LDAP", e);
         }
-
-        return sdr;
     }
 
-    private void lookupAttrs(Map<String, String> vals, Config config, ZSearchResultEntry sr, Map<String, Boolean> keys)
+    private void lookupAttrs(SearchDirResult hit, Config config, ZSearchResultEntry sr, Map<String, Boolean> keys)
     throws NginxLookupException, LdapException {
         for (Map.Entry<String, Boolean> keyEntry : keys.entrySet()) {
             String key = keyEntry.getKey();
             String val = lookupAttr(config, sr, key, keyEntry.getValue());
-            if (val != null)
-                vals.put(key, val);
+            if (val != null) {
+                hit.addConfiguredAttr(key, val);
+            }
         }
     }
 
@@ -166,12 +164,14 @@ public class LdapProvLdapLookup implements LdapLookup {
     throws NginxLookupException, LdapException {
         String val = null;
         String attr = config.getAttr(key);
-        if (attr == null && required)
-            throw new NginxLookupException("missing attr in config: "+key);
+        if (attr == null && required) {
+            throw new NginxLookupException("missing attr in config: " + key);
+        }
         if (attr != null) {
             val = sr.getAttributes().getAttrString(attr);
-            if (val == null && required)
-                throw new NginxLookupException("missing attr in search result: "+attr);
+            if (val == null && required) {
+                throw new NginxLookupException("missing attr in search result: " + attr);
+            }
         }
         return val;
     }
