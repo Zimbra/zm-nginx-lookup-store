@@ -58,9 +58,9 @@ public class NginxLookupExtension implements ZimbraExtension {
         int serverMaxSize;
         long serverMaxAge;
         NginxLookupCache.FreshnessChecker freshChecker = null;
-        try {
-            Provisioning myProv = Provisioning.getInstance();
-            Server svr = Provisioning.getInstance().getLocalServer();
+        Provisioning myProv = Provisioning.getInstance();
+        Server svr = Provisioning.getInstance().getLocalServerIfDefined();
+        if (svr != null) {
             domainMaxSize = svr.getLdapCacheReverseProxyLookupDomainMaxSize();
             domainMaxAge = svr.getLdapCacheReverseProxyLookupDomainMaxAge();
             serverMaxSize = svr.getLdapCacheReverseProxyLookupServerMaxSize();
@@ -72,7 +72,7 @@ public class NginxLookupExtension implements ZimbraExtension {
             } else {
                 ZimbraLog.ldap.debug("ReverseProxyLookupCache setup using defaults without freshness check");
             }
-        } catch (ServiceException e) {
+        } else {
             domainMaxSize = 100;
             domainMaxAge = 15 * Constants.MILLIS_PER_MINUTE;
             serverMaxSize = 100;
