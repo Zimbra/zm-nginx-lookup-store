@@ -22,7 +22,6 @@ import com.zimbra.common.account.Key.AccountBy;
 import com.zimbra.common.account.ProvisioningConstants;
 import com.zimbra.common.localconfig.DebugConfig;
 import com.zimbra.common.service.ServiceException;
-import com.zimbra.common.servicelocator.Selector;
 import com.zimbra.common.servicelocator.ServiceLocator;
 import com.zimbra.common.servicelocator.ZimbraServiceNames;
 import com.zimbra.common.util.StringUtil;
@@ -53,6 +52,7 @@ import com.zimbra.cs.nginx.NginxLookupExtension.NginxLookupRequest;
 import com.zimbra.cs.nginx.NginxLookupExtension.NginxLookupResponse;
 import com.zimbra.cs.service.AuthProvider;
 import com.zimbra.cs.service.authenticator.ClientCertAuthenticator;
+import com.zimbra.cs.util.ServerAssigner;
 import com.zimbra.cs.util.IPUtil;
 import com.zimbra.cs.util.Zimbra;
 
@@ -102,12 +102,14 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
         protected LdapProv prov;
         protected LdapLookup ldapLookup;
         protected ServiceLocator serviceLocator;
+        protected ServerAssigner serverAssigner;
 
         public NginxLookupHandler() throws ExtensionException {
             try {
                 prov = LdapProv.getInst();
                 ldapLookup = new LdapProvLdapLookup(prov);
                 serviceLocator = Zimbra.getAppContext().getBean(ServiceLocator.class);
+                serverAssigner = new ServerAssigner(serviceLocator);
             } catch (ServiceException e) {
                 throw new ExtensionException("unable to initialize nginx lookup servlet", e);
             }
@@ -126,6 +128,7 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
 
         public void setServiceLocator(ServiceLocator serviceLocator) {
             this.serviceLocator = serviceLocator;
+            serverAssigner = new ServerAssigner(serviceLocator);
         }
 
         @VisibleForTesting
@@ -218,6 +221,10 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                 return ZimbraServiceNames.IMAP;
             } else if ("imapssl".equals(proto)) {
                 return ZimbraServiceNames.IMAP;
+            } else if ("lmtp".equals(proto)) {
+                return ZimbraServiceNames.LMTP;
+            } else if ("lmtpssl".equals(proto)) {
+                return ZimbraServiceNames.LMTP;
             } else if ("pop3".equals(proto)) {
                 return ZimbraServiceNames.POP;
             } else if ("pop3ssl".equals(proto)) {
@@ -1062,23 +1069,13 @@ public class NginxLookupHandler extends ExtensionHttpHandler {
                     }
                 }
 
-                // When an account is not assigned a server in LDAP, use the service locator to pick one
+                // When an account is not assigned a server in LDAP, use the service locator to pick one, then reassign in LDAP
                 if (acct != null && mailhost == null) {
                     ZimbraLog.nginxlookup.debug("No mailhost found for user %s; using service locator to select a new upstream", req.user);
-                    ServiceLocator.Entry serviceInfo = null;
-                    try {
-                        Selector<ServiceLocator.Entry> selector = Zimbra.getAppContext().getBean(Selector.class);
-                        serviceInfo = serviceLocator.findOne(serviceID, selector, null, true);
-                    } catch (IOException e) {
-                        ZimbraLog.nginxlookup.warn("Could not reach service locator to select a new mailstore for user %s and service id %s for protocol %s; skipping mailstore assignment", authUserWithRealDomainName, serviceID, req.proto, e);
-                    }
+                    ServiceLocator.Entry serviceInfo = serverAssigner.reassign(acct, serviceID);
                     if (serviceInfo != null) {
                         mailhost = serviceInfo.hostName;
                         port = Integer.toString(serviceInfo.servicePort);
-
-                        // permanently assign the account to the newly selected server
-                        acct.setMailHost(mailhost);
-                        ZimbraLog.nginxlookup.info("User %s is now assigned to mailhost %s", req.user, mailhost);
                     }
                 }
 
