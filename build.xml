@@ -8,20 +8,6 @@
   <property name="jar.deploy.dir" location="${zimbra.home.dir}/lib/ext/${ext.name}"/>
   <property name="zimbra.extension.class" value="com.zimbra.cs.nginx.NginxLookupExtension"/>
 
-  <!--path id="class.path">
-    <fileset dir="${common.jars.dir}">
-      <include name="**/zimbrastore.jar" />
-      <include name="**/zimbracommon.jar" />
-      <include name="**/zimbrasoap.jar" />
-      <include name="**/zimbraclient.jar" />
-      <include name="**/commons-logging-*.jar" />
-      <include name="**/commons-httpclient-*.jar" />
-      <include name="**/commons-net-*.jar" />
-      <include name="**/servlet-api-*.jar" />
-      <include name="**/junit-*.jar" />
-    </fileset>
-  </path-->
-
   <target name="build-init">
     <mkdir dir="${build.classes.dir}"/>
     <mkdir dir="${dist.dir}"/>
