@@ -40,8 +40,9 @@ import com.zimbra.common.account.Key;
 import com.zimbra.common.account.Key.AccountBy;
 import com.zimbra.cs.account.soap.SoapProvisioning;
 import com.zimbra.cs.nginx.NginxLookupExtension;
+import junit.framework.TestCase;
 
-public class TestNginxLookup {
+public class TestNginxLookup extends TestCase {
     
     private static SoapProvisioning mSoapProv = null;
     
