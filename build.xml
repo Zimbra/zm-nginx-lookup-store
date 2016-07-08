@@ -4,9 +4,11 @@
   <property name="jar.file" value="${ext.name}.jar" />
   <property name="dist.lib.dir" location="${dist.dir}/lib"/>
   <property name="dist.lib.ext.dir" location="${dist.lib.dir}/ext"/>
-  <property name="implementation.title" value="Zimbra Nginx Lookup"/>
   <property name="jar.deploy.dir" location="${zimbra.home.dir}/lib/ext/${ext.name}"/>
+
+  <!-- zimbra.extension.class and implementation.title are used by zimbra-jar target to generate jar manifest -->
   <property name="zimbra.extension.class" value="com.zimbra.cs.nginx.NginxLookupExtension"/>
+  <property name="implementation.title" value="Zimbra Nginx Lookup"/>
 
   <target name="build-init">
     <mkdir dir="${build.classes.dir}"/>
