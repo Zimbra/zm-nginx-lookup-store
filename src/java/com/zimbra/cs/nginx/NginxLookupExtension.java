@@ -75,7 +75,7 @@ import com.zimbra.cs.nginx.AbstractNginxLookupLdapHelper.SearchDirResult;
 import com.zimbra.cs.service.AuthProvider;
 import com.zimbra.cs.service.authenticator.ClientCertAuthenticator;
 import com.zimbra.cs.zookeeper.CuratorManager;
-import com.zimbra.qa.unittest.NginxLookupExtensionTest;
+import com.zimbra.qa.unittest.TestNginxLookupExtension;
 import com.zimbra.qa.unittest.TestNginxLookup;
 import com.zimbra.qa.unittest.ZimbraSuite;
 
@@ -113,7 +113,7 @@ public class NginxLookupExtension implements ZimbraExtension {
 
         try {
             ZimbraSuite.addTest(TestNginxLookup.class);
-            ZimbraSuite.addTest(NginxLookupExtensionTest.class);
+            ZimbraSuite.addTest(TestNginxLookupExtension.class);
         } catch (NoClassDefFoundError e) {
             // Expected in production, because JUnit is not available.
             ZimbraLog.test.debug("Unable to load TestClientUploader unit tests.", e);

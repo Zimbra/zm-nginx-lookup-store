@@ -44,7 +44,7 @@ import com.zimbra.cs.nginx.NginxLookupExtension;
  * Note: restart server after each run, the lookup servlet caches things
  *       TODO: send a flush cache command to the lookup servlet
  */
-public class NginxLookupExtensionTest extends TestCase {
+public class TestNginxLookupExtension extends TestCase {
     
     private static final String USER = "user1";
     private static final String DEFAULT_DOMAIN = "phoebe.mbp";// TODO, REremove hardcode
@@ -320,7 +320,7 @@ public class NginxLookupExtensionTest extends TestCase {
     }
     
     private static String baseDomainName() {
-        return NginxLookupExtensionTest.class.getName().toLowerCase();
+        return TestNginxLookupExtension.class.getName().toLowerCase();
     }
     
     private static String getDomainName(String domainName) {
