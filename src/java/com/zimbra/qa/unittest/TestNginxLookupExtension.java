@@ -15,7 +15,7 @@
  * ***** END LICENSE BLOCK *****
  */
 
-package com.zimbra.cs.nginx;
+package com.zimbra.qa.unittest;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -23,6 +23,7 @@ import java.util.Map;
 import java.io.IOException;
 
 import junit.framework.Assert;
+import junit.framework.TestCase;
 
 import org.apache.commons.httpclient.Header;
 import org.apache.commons.httpclient.HttpClient;
@@ -37,12 +38,13 @@ import com.zimbra.cs.account.Provisioning;
 import com.zimbra.common.account.Key;
 import com.zimbra.common.account.Key.AccountBy;
 import com.zimbra.qa.unittest.TestLdap;
+import com.zimbra.cs.nginx.NginxLookupExtension;
 
 /*
  * Note: restart server after each run, the lookup servlet caches things
  *       TODO: send a flush cache command to the lookup servlet
  */
-public class NginxLookupExtensionTest extends TestLdap {
+public class TestNginxLookupExtension extends TestCase {
     
     private static final String USER = "user1";
     private static final String DEFAULT_DOMAIN = "phoebe.mbp";// TODO, REremove hardcode
@@ -318,7 +320,7 @@ public class NginxLookupExtensionTest extends TestLdap {
     }
     
     private static String baseDomainName() {
-        return NginxLookupExtensionTest.class.getName().toLowerCase();
+        return TestNginxLookupExtension.class.getName().toLowerCase();
     }
     
     private static String getDomainName(String domainName) {
