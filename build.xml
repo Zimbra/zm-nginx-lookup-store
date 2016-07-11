@@ -1,4 +1,4 @@
-<project name="ZimbraNginxLookup" default="jar" xmlns:ivy="antlib:org.apache.ivy.ant">
+<project name="ZimbraNginxLookup" default="jar">
   <import file="../zm-zcs/ant-global.xml" />
   <property name="ext.name" value="nginx-lookup"/>
   <property name="jar.file" value="${ext.name}.jar" />
