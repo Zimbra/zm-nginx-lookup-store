@@ -1,7 +1,6 @@
-<project name="ZimbraNginxLookup" default="jar">
+<project name="zm-nginx-lookup-store" default="jar">
   <import file="../zm-zcs/ant-global.xml" />
   <property name="ext.name" value="nginx-lookup"/>
-  <property name="jar.file" value="${ext.name}.jar" />
   <property name="dist.lib.dir" location="${dist.dir}/lib"/>
   <property name="dist.lib.ext.dir" location="${dist.lib.dir}/ext"/>
   <property name="jar.deploy.dir" location="${zimbra.home.dir}/lib/ext/${ext.name}"/>
@@ -31,5 +30,11 @@
   <target name="deploy" depends="jar" description="deploy nginx lookup extension">
     <copy file="${build.dir}/${jar.file}" tofile="${jar.deploy.dir}/${jar.file}"/>
     <ant dir="${server.dir}" target="restart-webserver"/>
+  </target>
+
+  <target name="undeploy" description="remove nginx lookup extension from local ZCS instance">
+    <ant dir="${server.dir}" target="stop-webserver"/>
+    <delete dir="${jar.deploy.dir}"/>
+    <ant dir="${server.dir}" target="start-webserver"/>
   </target>
 </project>
