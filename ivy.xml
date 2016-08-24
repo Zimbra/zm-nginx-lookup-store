@@ -2,7 +2,7 @@
 <ivy-module version="2.0"
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
  xsi:noNamespaceSchemaLocation="http://ant.apache.org/ivy/schemas/ivy.xsd">
- <info organisation="com.zimbra" module="zm-nginx-lookup-store" status="release">
+ <info organisation="zimbra" module="zm-nginx-lookup-store" status="integration">
  </info>
  <dependencies>
   <dependency org="junit" name="junit" rev="4.8.2" />
@@ -10,9 +10,9 @@
   <dependency org="commons-httpclient" name="commons-httpclient" rev="3.1" />
   <dependency org="commons-logging" name="commons-logging" rev="1.0" />
   <dependency org="commons-net" name="commons-net" rev="3.3" />
-  <dependency org="zimbraclient" name="zimbraclient" rev="1.0" />
-  <dependency org="zimbracommon" name="zimbracommon" rev="1.0" />
-  <dependency org="zimbrasoap" name="zimbrasoap" rev="1.0" />
-  <dependency org="zimbrastore" name="zimbrastore" rev="1.0" />
+  <dependency org="zimbra" name="zm-client" rev="latest.integration" />
+  <dependency org="zimbra" name="zm-common" rev="latest.integration" />
+  <dependency org="zimbra" name="zm-soap" rev="latest.integration" />
+  <dependency org="zimbra" name="zm-store" rev="latest.integration" />
  </dependencies>
 </ivy-module>
