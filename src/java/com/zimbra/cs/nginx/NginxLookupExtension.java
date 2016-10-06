@@ -22,17 +22,15 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.security.SecureRandom;
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.commons.net.util.SubnetUtils;
-import org.apache.commons.net.util.SubnetUtils.SubnetInfo;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -41,6 +39,8 @@ import javax.servlet.http.HttpServletResponse;
 import org.apache.commons.httpclient.Header;
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.methods.GetMethod;
+import org.apache.commons.net.util.SubnetUtils;
+import org.apache.commons.net.util.SubnetUtils.SubnetInfo;
 
 import com.zimbra.common.account.Key;
 import com.zimbra.common.account.Key.AccountBy;
@@ -67,6 +67,7 @@ import com.zimbra.cs.extension.ExtensionDispatcherServlet;
 import com.zimbra.cs.extension.ExtensionException;
 import com.zimbra.cs.extension.ExtensionHttpHandler;
 import com.zimbra.cs.extension.ZimbraExtension;
+import com.zimbra.cs.imap.ImapLoadBalancingMechanism;
 import com.zimbra.cs.ldap.ILdapContext;
 import com.zimbra.cs.ldap.ZLdapFilter;
 import com.zimbra.cs.ldap.ZLdapFilterFactory;
@@ -75,8 +76,8 @@ import com.zimbra.cs.nginx.AbstractNginxLookupLdapHelper.SearchDirResult;
 import com.zimbra.cs.service.AuthProvider;
 import com.zimbra.cs.service.authenticator.ClientCertAuthenticator;
 import com.zimbra.cs.zookeeper.CuratorManager;
-import com.zimbra.qa.unittest.TestNginxLookupExtension;
 import com.zimbra.qa.unittest.TestNginxLookup;
+import com.zimbra.qa.unittest.TestNginxLookupExtension;
 import com.zimbra.qa.unittest.ZimbraSuite;
 
 public class NginxLookupExtension implements ZimbraExtension {
@@ -875,6 +876,31 @@ public class NginxLookupExtension implements ZimbraExtension {
             if (domain == null)
                 ZimbraLog.nginxlookup.debug("cannot find domain for external route info, user=" + addr);
             return domain;
+        }
+
+        private Server lookupUpstreamImapServer(NginxLookupRequest req) throws ServiceException {
+            ImapLoadBalancingMechanism LBMech = ImapLoadBalancingMechanism.newInstance();
+            Server server = prov.getLocalServer();
+            String[] imapServerAddrs;
+            if (server != null) {
+                imapServerAddrs = server.getReverseProxyUpstreamImapServers();
+            } else {
+                imapServerAddrs = prov.getConfig().getReverseProxyUpstreamImapServers();
+            }
+            List<Server> imapServers = new LinkedList<Server>();
+            for (String host: imapServerAddrs) {
+                try {
+                    Server imapServer = prov.getServerByServiceHostname(host);
+                    imapServers.add(imapServer);
+                } catch (ServiceException e) {
+                    ZimbraLog.nginxlookup.warn("cannot get imap server %s", host);
+                }
+            }
+            if (imapServers.isEmpty()) {
+                return null;
+            } else {
+                return LBMech.getImapServerFromPool(req.httpReq, imapServers);
+            }
         }
 
         private void search(NginxLookupRequest req) throws NginxLookupException {
