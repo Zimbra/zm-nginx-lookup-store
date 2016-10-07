@@ -1038,6 +1038,24 @@ public class NginxLookupExtension implements ZimbraExtension {
                 String mailhost = null;
                 String port = null;
 
+                //check to see if an IMAP request should be routed to an upstream IMAP server
+                if (req.proto.equals(IMAP) || req.proto.equals(IMAP_SSL)) {
+                    Server imapServer = lookupUpstreamImapServer(req);
+                    if (imapServer != null) {
+                        String upstreamHost = imapServer.getServiceHostname();
+                        if (doDnsLookup) {
+                            upstreamHost = this.getIPByIPMode(upstreamHost).getHostAddress();
+                        }
+                        String upstreamPort = req.proto.equals(IMAP) ? imapServer.getImapBindPortAsString() : imapServer.getImapSSLBindPortAsString();
+                        DomainExternalRouteInfo domain = getDomainExternalRouteInfo(zlc, config, authUserWithRealDomainName);
+                        boolean extRouteIncludeOrigAuthuser = domain == null ?
+                                prov.getDefaultDomain().isReverseProxyExternalRouteIncludeOriginalAuthusername() :
+                                domain.externalRouteIncludeOriginalAuthusername();
+                        sendResult(req, upstreamHost, upstreamPort, authUser, true, extRouteIncludeOrigAuthuser);
+                        return;
+                    }
+                }
+
                 // if still not found, see if we should use external route based on a domain setting
                 if (sdr == null) {
                     DomainExternalRouteInfo domain = getDomainExternalRouteInfo(zlc, config, authUserWithRealDomainName);
