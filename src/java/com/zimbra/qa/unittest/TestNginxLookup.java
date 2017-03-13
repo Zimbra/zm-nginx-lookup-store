@@ -16,6 +16,9 @@
  */
 package com.zimbra.qa.unittest;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -40,9 +43,7 @@ import com.zimbra.cs.account.Provisioning;
 import com.zimbra.cs.account.soap.SoapProvisioning;
 import com.zimbra.cs.nginx.NginxLookupExtension;
 
-import junit.framework.TestCase;
-
-public class TestNginxLookup extends TestCase {
+public class TestNginxLookup {
 
     private static SoapProvisioning mSoapProv = null;
 
