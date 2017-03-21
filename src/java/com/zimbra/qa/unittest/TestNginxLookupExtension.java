@@ -17,6 +17,8 @@
 
 package com.zimbra.qa.unittest;
 
+import static org.junit.Assert.assertEquals;
+
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -35,14 +37,11 @@ import com.zimbra.cs.account.Domain;
 import com.zimbra.cs.account.Provisioning;
 import com.zimbra.cs.nginx.NginxLookupExtension;
 
-import junit.framework.Assert;
-import junit.framework.TestCase;
-
 /*
  * Note: restart server after each run, the lookup servlet caches things
  *       TODO: send a flush cache command to the lookup servlet
  */
-public class TestNginxLookupExtension extends TestCase {
+public class TestNginxLookupExtension {
 
     private static final String USER = "user1";
     private static final String DEFAULT_DOMAIN = "phoebe.mbp";// TODO, REremove hardcode
@@ -173,19 +172,19 @@ public class TestNginxLookupExtension extends TestCase {
 
 
         void assertAuthStatusOK() {
-            Assert.assertEquals("OK", authStatus());
+            assertEquals("OK", authStatus());
         }
 
         void assertAuthUser(String expected) {
-            Assert.assertEquals(expected, authUser());
+            assertEquals(expected, authUser());
         }
 
         void assertAuthServer(String expected) {
-            Assert.assertEquals(expected, authServer());
+            assertEquals(expected, authServer());
         }
 
         void assertAuthPort(String expected) {
-            Assert.assertEquals(expected, authPort());
+            assertEquals(expected, authPort());
         }
 
         void assertBasic(String expectedUser, String expectedServer, String expectedPort) {
@@ -197,7 +196,7 @@ public class TestNginxLookupExtension extends TestCase {
     }
 
     private RespHeaders senRequest(LookupData lookupData) throws IOException {
-        String url = "http://localhost:7072/service/extension/nginx-lookup";
+        String url = "https://localhost:7072/service/extension/nginx-lookup";
 
         HttpClient client = new HttpClient();
         GetMethod method = new GetMethod(url);
