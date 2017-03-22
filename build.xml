@@ -23,13 +23,17 @@
     </copy>
   </target>
 
-  <!-- this target uses common compile and zimbra-jar targets defiend in ant-global.xml -->
+  <!-- this target uses common compile and zimbra-jar targets defined in ant-global.xml -->
   <target name="jar" depends="compile,zimbra-jar" description="Creates the jar file" />
-	
+
   <!-- this target drops nginx-lookup.jar file into /opt/zimbra/lib/ext/nginx-lookup folder and restarts mailboxd -->
   <target name="deploy" depends="jar" description="deploy nginx lookup extension">
-    <copy file="${build.dir}/${jar.file}" tofile="${jar.deploy.dir}/${jar.file}"/>
-    <ant dir="${server.dir}" target="restart-webserver"/>
+    <ant dir="${server.dir}" target="stop-webserver" inheritAll="false"/>
+    <delete dir="${jar.deploy.dir}"/>
+    <copy todir="${jar.deploy.dir}">
+      <fileset dir="${build.dir}" includes="${jar.file}" />
+    </copy>
+    <ant dir="${server.dir}" target="start-webserver" inheritAll="false"/>
   </target>
 
   <target name="undeploy" description="remove nginx lookup extension from local ZCS instance">
