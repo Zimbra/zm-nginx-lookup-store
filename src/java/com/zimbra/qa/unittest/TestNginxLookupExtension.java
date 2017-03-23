@@ -20,17 +20,21 @@ package com.zimbra.qa.unittest;
 import static org.junit.Assert.assertEquals;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.commons.httpclient.Header;
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.methods.GetMethod;
+import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Before;
 import org.junit.Test;
 
 import com.zimbra.common.account.Key;
 import com.zimbra.common.account.Key.AccountBy;
+import com.zimbra.common.localconfig.LC;
 import com.zimbra.common.service.ServiceException;
 import com.zimbra.cs.account.Account;
 import com.zimbra.cs.account.Domain;
@@ -43,21 +47,22 @@ import com.zimbra.cs.nginx.NginxLookupExtension;
  */
 public class TestNginxLookupExtension {
 
-    private static final String USER = "user1";
-    private static final String DEFAULT_DOMAIN = "phoebe.mbp";// TODO, REremove hardcode
+    private static final String USER = "testnginxlookupextension-user1";
+    private static String DEFAULT_DOMAIN = null;
 
-    private static final String QUSER = USER + "@" +DEFAULT_DOMAIN;
+    private static String QUSER = USER + "@" +DEFAULT_DOMAIN;
 
     private static final String PASSWORD = "test123";
 
     private static final String LOCALHOST = "localhost";
     private static final String LOCALHOST_IP = "127.0.0.1";
+    private static String MY_IP_ADDRESS = null;
 
     private static final String POP3_PORT     = "7110";
     private static final String POP3_SSL_PORT = "7995";
     private static final String IMAP_PORT     = "7143";
     private static final String IMAP_SSL_PORT = "7993";
-    private static final String HTTP_PORT     = "7070";
+    private static final String HTTP_PORT     = LC.zimbra_mail_service_port.value();
 
     private enum AuthMethod {
         plain,
@@ -324,6 +329,20 @@ public class TestNginxLookupExtension {
         return domainName + "." + baseDomainName();
     }
 
+    @Before
+    public void setUp() throws Exception {
+        tearDown();
+        InetAddress IP = InetAddress.getLocalHost();
+        MY_IP_ADDRESS = IP.getHostAddress();
+        DEFAULT_DOMAIN = AccountTestUtil.getDomain();
+        QUSER = USER + "@" +DEFAULT_DOMAIN;
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        TestUtil.deleteAccount(USER);
+    }
+
     @AfterClass
     public static void cleanup() throws Exception {
         String baseDomainName = baseDomainName();
@@ -332,37 +351,42 @@ public class TestNginxLookupExtension {
 
     @Test
     public void imap() throws Exception {
-        LookupData lookupData = new LookupData(AuthMethod.plain, USER, PASSWORD, AuthProtocol.imap);
+        TestUtil.createAccount(QUSER);
+        LookupData lookupData = new LookupData(AuthMethod.plain, QUSER, PASSWORD, AuthProtocol.imap);
         RespHeaders respHdrs = senRequest(lookupData);
-        respHdrs.assertBasic(QUSER, LOCALHOST_IP, IMAP_PORT);
+        respHdrs.assertBasic(QUSER, MY_IP_ADDRESS, IMAP_PORT);
     }
 
     @Test
     public void imapssl() throws Exception {
-        LookupData lookupData = new LookupData(AuthMethod.plain, USER, PASSWORD, AuthProtocol.imapssl);
+        TestUtil.createAccount(QUSER);
+        LookupData lookupData = new LookupData(AuthMethod.plain, QUSER, PASSWORD, AuthProtocol.imapssl);
         RespHeaders respHdrs = senRequest(lookupData);
-        respHdrs.assertBasic(QUSER, LOCALHOST_IP, IMAP_SSL_PORT);
+        respHdrs.assertBasic(QUSER, MY_IP_ADDRESS, IMAP_SSL_PORT);
     }
 
     @Test
     public void pop3() throws Exception {
-        LookupData lookupData = new LookupData(AuthMethod.plain, USER, PASSWORD, AuthProtocol.pop3);
+        TestUtil.createAccount(QUSER);
+        LookupData lookupData = new LookupData(AuthMethod.plain, QUSER, PASSWORD, AuthProtocol.pop3);
         RespHeaders respHdrs = senRequest(lookupData);
-        respHdrs.assertBasic(QUSER, LOCALHOST_IP, POP3_PORT);
+        respHdrs.assertBasic(QUSER, MY_IP_ADDRESS, POP3_PORT);
     }
 
     @Test
     public void pop3ssl() throws Exception {
-        LookupData lookupData = new LookupData(AuthMethod.plain, USER, PASSWORD, AuthProtocol.pop3ssl);
+        TestUtil.createAccount(QUSER);
+        LookupData lookupData = new LookupData(AuthMethod.plain, QUSER, PASSWORD, AuthProtocol.pop3ssl);
         RespHeaders respHdrs = senRequest(lookupData);
-        respHdrs.assertBasic(QUSER, LOCALHOST_IP, POP3_SSL_PORT);
+        respHdrs.assertBasic(QUSER, MY_IP_ADDRESS, POP3_SSL_PORT);
     }
 
     @Test
     public void http() throws Exception {
-        LookupData lookupData = new LookupData(AuthMethod.plain, USER, PASSWORD, AuthProtocol.http);
+        TestUtil.createAccount(USER);
+        LookupData lookupData = new LookupData(AuthMethod.plain, QUSER, PASSWORD, AuthProtocol.http);
         RespHeaders respHdrs = senRequest(lookupData);
-        respHdrs.assertBasic(QUSER, LOCALHOST_IP, HTTP_PORT);
+        respHdrs.assertBasic(QUSER, MY_IP_ADDRESS, HTTP_PORT);
     }
 
     @Test
