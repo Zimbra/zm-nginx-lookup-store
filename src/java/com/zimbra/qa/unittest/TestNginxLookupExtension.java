@@ -33,9 +33,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.zimbra.common.account.Key;
-import com.zimbra.common.account.Key.AccountBy;
 import com.zimbra.common.localconfig.LC;
 import com.zimbra.common.service.ServiceException;
+import com.zimbra.common.util.ZimbraLog;
 import com.zimbra.cs.account.Account;
 import com.zimbra.cs.account.Domain;
 import com.zimbra.cs.account.Provisioning;
@@ -154,11 +154,6 @@ public class TestNginxLookupExtension {
             mHeaders.put(header.getName(), header.getValue());
         }
 
-        void dump() {
-            for (Map.Entry<String, String> header : mHeaders.entrySet())
-                System.out.println(header.getKey() + ": " + header.getValue());
-        }
-
         String authStatus() {
             return mHeaders.get(NginxLookupExtension.NginxLookupHandler.AUTH_STATUS);
         }
@@ -217,7 +212,7 @@ public class TestNginxLookupExtension {
                 respHdrs.add(header);
 
         } catch (IOException e) {
-            e.printStackTrace();
+            ZimbraLog.test.error("Problem executing HTTP method", e);
             throw e;
         }
 
@@ -226,10 +221,6 @@ public class TestNginxLookupExtension {
 
     private Provisioning getProv() {
         return Provisioning.getInstance();
-    }
-
-    private Account getAccount(String name) throws ServiceException {
-        return getProv().get(AccountBy.name, name);
     }
 
     private Account createAccount(String localpart, String domainName) throws ServiceException {
@@ -241,10 +232,6 @@ public class TestNginxLookupExtension {
 
     private void deleteAccount(Account acct) throws ServiceException {
         getProv().deleteAccount(acct.getId());
-    }
-
-    private Domain getDomain() throws ServiceException {
-        return getProv().get(Key.DomainBy.name, DEFAULT_DOMAIN);
     }
 
     private Domain getDomain(String name) throws ServiceException {
@@ -275,20 +262,6 @@ public class TestNginxLookupExtension {
         getProv().modifyAttrs(acct, attrs);
     }
 
-    private void unsetExternalRoute(Account acct) throws Exception {
-        Map<String,Object> attrs = new HashMap<String,Object>();
-        acct.unsetReverseProxyUseExternalRoute(attrs);
-        acct.unsetExternalPop3Port(attrs);
-        acct.unsetExternalPop3SSLPort(attrs);
-        acct.unsetExternalImapPort(attrs);
-        acct.unsetExternalImapSSLPort(attrs);
-        acct.unsetExternalPop3Hostname(attrs);
-        acct.unsetExternalPop3SSLHostname(attrs);
-        acct.unsetExternalImapHostname(attrs);
-        acct.unsetExternalImapSSLHostname(attrs);
-        getProv().modifyAttrs(acct, attrs);
-    }
-
     private void setupExternalRoute(Domain domain, Boolean useExternalRoute, Boolean useExternalRouteIfAccountNotExist,
             String pop3Port, String pop3sslPort, String imapPort, String imapsslPort) throws Exception {
         Map<String,Object> attrs = new HashMap<String,Object>();
@@ -304,20 +277,6 @@ public class TestNginxLookupExtension {
         domain.setExternalPop3SSLHostname(LOCALHOST, attrs);
         domain.setExternalImapHostname(LOCALHOST, attrs);
         domain.setExternalImapSSLHostname(LOCALHOST, attrs);
-        getProv().modifyAttrs(domain, attrs);
-    }
-
-    private void unsetExternalRoute(Domain domain) throws Exception {
-        Map<String,Object> attrs = new HashMap<String,Object>();
-        domain.unsetReverseProxyUseExternalRoute(attrs);
-        domain.unsetExternalPop3Port(attrs);
-        domain.unsetExternalPop3SSLPort(attrs);
-        domain.unsetExternalImapPort(attrs);
-        domain.unsetExternalImapSSLPort(attrs);
-        domain.unsetExternalPop3Hostname(attrs);
-        domain.unsetExternalPop3SSLHostname(attrs);
-        domain.unsetExternalImapHostname(attrs);
-        domain.unsetExternalImapSSLHostname(attrs);
         getProv().modifyAttrs(domain, attrs);
     }
 
