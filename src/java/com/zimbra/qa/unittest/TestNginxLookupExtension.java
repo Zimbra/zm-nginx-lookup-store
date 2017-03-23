@@ -28,7 +28,6 @@ import org.apache.commons.httpclient.Header;
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.methods.GetMethod;
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -48,6 +47,8 @@ import com.zimbra.cs.nginx.NginxLookupExtension;
 public class TestNginxLookupExtension {
 
     private static final String USER = "testnginxlookupextension-user1";
+    private Domain externalRouteDomain = null;
+    private Account externalRouteAccount = null;
     private static String DEFAULT_DOMAIN = null;
 
     private static String QUSER = USER + "@" +DEFAULT_DOMAIN;
@@ -231,6 +232,9 @@ public class TestNginxLookupExtension {
     }
 
     private void deleteAccount(Account acct) throws ServiceException {
+        if (acct == null) {
+            return;
+        }
         getProv().deleteAccount(acct.getId());
     }
 
@@ -243,6 +247,9 @@ public class TestNginxLookupExtension {
     }
 
     private void deleteDomain(Domain domain) throws ServiceException {
+        if (domain == null) {
+            return;
+        }
         getProv().deleteDomain(domain.getId());
     }
 
@@ -300,12 +307,10 @@ public class TestNginxLookupExtension {
     @After
     public void tearDown() throws Exception {
         TestUtil.deleteAccount(USER);
-    }
-
-    @AfterClass
-    public static void cleanup() throws Exception {
-        String baseDomainName = baseDomainName();
-        TestLdap.deleteEntireBranch(baseDomainName);
+        deleteAccount(externalRouteAccount);
+        deleteDomain(externalRouteDomain);
+        externalRouteAccount = null;
+        externalRouteDomain = null;
     }
 
     @Test
@@ -354,10 +359,10 @@ public class TestNginxLookupExtension {
         String domainName = getDomainName("account.account.externalroute");
         String quser = user + "@" + domainName;
 
-        Account acct = createAccount(user, domainName);
-        Domain domain = getDomain(domainName);
+        externalRouteAccount = createAccount(user, domainName);
+        externalRouteDomain = getDomain(domainName);
 
-        setupExternalRoute(acct, true, "1", "2", "3", "4");
+        setupExternalRoute(externalRouteAccount, true, "1", "2", "3", "4");
 
         LookupData lookupData;
         RespHeaders respHdrs;
@@ -377,9 +382,6 @@ public class TestNginxLookupExtension {
         lookupData = new LookupData(AuthMethod.plain, quser, PASSWORD, AuthProtocol.imapssl);
         respHdrs = senRequest(lookupData);
         respHdrs.assertBasic(quser, LOCALHOST_IP, "4");
-
-        deleteAccount(acct);
-        deleteDomain(domain);
     }
 
     @Test
@@ -388,11 +390,11 @@ public class TestNginxLookupExtension {
         String domainName = getDomainName("account.domain.externalroute");
         String quser = user + "@" + domainName;
 
-        Account acct = createAccount(user, domainName);
-        setupExternalRoute(acct, true, "", "", "", "");
+        externalRouteAccount = createAccount(user, domainName);
+        setupExternalRoute(externalRouteAccount, true, "", "", "", "");
 
-        Domain domain = getDomain(domainName);
-        setupExternalRoute(domain, true, null, "5", "6", "7", "8");
+        externalRouteDomain = getDomain(domainName);
+        setupExternalRoute(externalRouteDomain, true, null, "5", "6", "7", "8");
 
         LookupData lookupData;
         RespHeaders respHdrs;
@@ -412,9 +414,6 @@ public class TestNginxLookupExtension {
         lookupData = new LookupData(AuthMethod.plain, quser, PASSWORD, AuthProtocol.imapssl);
         respHdrs = senRequest(lookupData);
         respHdrs.assertBasic(quser, LOCALHOST_IP, "8");
-
-        deleteAccount(acct);
-        deleteDomain(domain);
     }
 
     @Test
@@ -423,11 +422,11 @@ public class TestNginxLookupExtension {
         String domainName = getDomainName("domain.account.externalroute");
         String quser = user + "@" + domainName;
 
-        Account acct = createAccount(user, domainName);
-        setupExternalRoute(acct, null, "1", "2", "3", "4");
+        externalRouteAccount = createAccount(user, domainName);
+        setupExternalRoute(externalRouteAccount, null, "1", "2", "3", "4");
 
-        Domain domain = getDomain(domainName);
-        setupExternalRoute(domain, true, null, "5", "6", "7", "8");
+        externalRouteDomain = getDomain(domainName);
+        setupExternalRoute(externalRouteDomain, true, null, "5", "6", "7", "8");
 
         LookupData lookupData;
         RespHeaders respHdrs;
@@ -447,9 +446,6 @@ public class TestNginxLookupExtension {
         lookupData = new LookupData(AuthMethod.plain, quser, PASSWORD, AuthProtocol.imapssl);
         respHdrs = senRequest(lookupData);
         respHdrs.assertBasic(quser, LOCALHOST_IP, "4");
-
-        deleteAccount(acct);
-        deleteDomain(domain);
     }
 
     @Test
@@ -458,11 +454,11 @@ public class TestNginxLookupExtension {
         String domainName = getDomainName("domain.domain.externalroute");
         String quser = user + "@" + domainName;
 
-        Account acct = createAccount(user, domainName);
-        setupExternalRoute(acct, null, "", "", "", "");
+        externalRouteAccount = createAccount(user, domainName);
+        setupExternalRoute(externalRouteAccount, null, "", "", "", "");
 
-        Domain domain = getDomain(domainName);
-        setupExternalRoute(domain, true, null, "5", "6", "7", "8");
+        externalRouteDomain = getDomain(domainName);
+        setupExternalRoute(externalRouteDomain, true, null, "5", "6", "7", "8");
 
         LookupData lookupData;
         RespHeaders respHdrs;
@@ -482,9 +478,6 @@ public class TestNginxLookupExtension {
         lookupData = new LookupData(AuthMethod.plain, quser, PASSWORD, AuthProtocol.imapssl);
         respHdrs = senRequest(lookupData);
         respHdrs.assertBasic(quser, LOCALHOST_IP, "8");
-
-        deleteAccount(acct);
-        deleteDomain(domain);
     }
 
     @Test
@@ -493,8 +486,8 @@ public class TestNginxLookupExtension {
         String domainName = getDomainName("domain.domain.acountNotExist.externalroute");
         String quser = user + "@" + domainName;
 
-        Domain domain = createDomain(domainName);
-        setupExternalRoute(domain, true, true, "5", "6", "7", "8");
+        externalRouteDomain = createDomain(domainName);
+        setupExternalRoute(externalRouteDomain, true, true, "5", "6", "7", "8");
 
         LookupData lookupData;
         RespHeaders respHdrs;
@@ -514,7 +507,5 @@ public class TestNginxLookupExtension {
         lookupData = new LookupData(AuthMethod.plain, quser, PASSWORD, AuthProtocol.imapssl);
         respHdrs = senRequest(lookupData);
         respHdrs.assertBasic(quser, LOCALHOST_IP, "8");
-
-        deleteDomain(domain);
     }
 }
