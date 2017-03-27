@@ -20,86 +20,101 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.httpclient.Header;
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.methods.GetMethod;
-import org.junit.BeforeClass;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Ignore;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 
 import com.zimbra.common.account.Key;
 import com.zimbra.common.account.Key.AccountBy;
+import com.zimbra.common.localconfig.LC;
+import com.zimbra.common.service.ServiceException;
 import com.zimbra.common.soap.AdminConstants;
 import com.zimbra.common.util.CliUtil;
+import com.zimbra.common.util.ZimbraLog;
 import com.zimbra.cs.account.Account;
 import com.zimbra.cs.account.Config;
 import com.zimbra.cs.account.Domain;
 import com.zimbra.cs.account.Provisioning;
+import com.zimbra.cs.account.Server;
 import com.zimbra.cs.account.soap.SoapProvisioning;
+import com.zimbra.cs.httpclient.URLUtil;
 import com.zimbra.cs.nginx.NginxLookupExtension;
 
 public class TestNginxLookup {
 
-    private static SoapProvisioning mSoapProv = null;
+    @Rule
+    public TestName name = new TestName();
 
-    private static final String URL = "http://localhost:7072/service/extension/nginx-lookup";
+    private static SoapProvisioning mSoapProv = null;
+    private static final Provisioning prov = Provisioning.getInstance();
+
+    private static final String URL = "https://localhost:7072/service/extension/nginx-lookup";
 
     // use special chars for testing bug 67370
-    private static final String ACCT_LOCALPART = "!%a|{e-q}$.x&j.^i_l#l~3+*=z?1321332668"; // "user1";
-    private static final String ACCT2_LOCALPART = "user2";
+    private static final String ACCT_LOCALPART = "nginx-lookup!%a|{e-q}$.x&j.^i_l#l~3+*=z?1321332668"; // "user1";
+    private static final String ACCT2_LOCALPART = "nginx-lookup-user2";
 
     private static final String PASSWORD = "test123";
 
     // private static final String IMAP_HOST = "10.10.131.101";
     // private static final String IMAP_HOST = "192.168.0.162";
-    private static final String IMAP_HOST_IP = "127.0.0.1";
-    private static final String IMAP_SSL_HOST_IP = "127.0.0.1";
+    private static String IMAP_HOST_IP = "127.0.0.1";
+    private static String IMAP_SSL_HOST_IP = "127.0.0.1";
     private static final String IMAP_PORT = "7143";
     private static final String IMAP_SSL_PORT = "7993";
 
     // private static final String POP3_HOST = "192.168.0.162";
-    private static final String POP3_HOST_IP = "127.0.0.1";
-    private static final String POP3_SSL_HOST_IP = "127.0.0.1";
+    private static String POP3_HOST_IP = "127.0.0.1";
+    private static String POP3_SSL_HOST_IP = "127.0.0.1";
     private static final String POP3_PORT = "7110";
     private static final String POP3_SSL_PORT = "7995";
 
-    private static final String HTTP_HOST_IP = "127.0.0.1";
-    private static final String HTTP_PORT    = "7070";
+    private static String HTTP_HOST_IP = "127.0.0.1";
+    private static final String HTTP_PORT    = LC.zimbra_mail_service_port.value();
 
     private static final String TEST_HOST_DOGFOOD    = "dogfood.zimbra.com";
-    private static final String TEST_HOST_IP_DOGFOOD = "10.113.63.59"; // "207.126.229.140";
+    private static String TEST_HOST_IP_DOGFOOD = "10.113.63.59"; // "207.126.229.140";
     private static final String TEST_HOST_CATFOOD    = "catfood.zimbra.com";
-    private static final String TEST_HOST_IP_CATFOOD = "10.113.63.60"; // "207.126.229.141";
+    private static String TEST_HOST_IP_CATFOOD = "10.113.63.60"; // "207.126.229.141";
 
     private static final String IMAP_EXTERNAL_HOST = TEST_HOST_DOGFOOD;
-    private static final String IMAP_EXTERNAL_HOST_IP = TEST_HOST_IP_DOGFOOD;
+    private static String IMAP_EXTERNAL_HOST_IP = TEST_HOST_IP_DOGFOOD;
     private static final String IMAP_EXTERNAL_PORT = "1111";
     private static final String IMAP_SSL_EXTERNAL_HOST = TEST_HOST_CATFOOD;
-    private static final String IMAP_SSL_EXTERNAL_HOST_IP = TEST_HOST_IP_CATFOOD;
+    private static String IMAP_SSL_EXTERNAL_HOST_IP = TEST_HOST_IP_CATFOOD;
     private static final String IMAP_SSL_EXTERNAL_PORT = "2222";
     private static final String POP3_EXTERNAL_HOST = TEST_HOST_CATFOOD;
-    private static final String POP3_EXTERNAL_HOST_IP = TEST_HOST_IP_CATFOOD;
+    private static String POP3_EXTERNAL_HOST_IP = TEST_HOST_IP_CATFOOD;
     private static final String POP3_EXTERNAL_PORT = "3333";
     private static final String POP3_SSL_EXTERNAL_HOST = TEST_HOST_DOGFOOD;
-    private static final String POP3_SSL_EXTERNAL_HOST_IP = TEST_HOST_IP_DOGFOOD;
+    private static String POP3_SSL_EXTERNAL_HOST_IP = TEST_HOST_IP_DOGFOOD;
     private static final String POP3_SSL_EXTERNAL_PORT = "4444";
 
     private static final String IMAP_EXTERNAL_HOST_ON_DOMAIN = TEST_HOST_CATFOOD;
-    private static final String IMAP_EXTERNAL_HOST_IP_ON_DOMAIN = TEST_HOST_IP_CATFOOD;
+    private static String IMAP_EXTERNAL_HOST_IP_ON_DOMAIN = TEST_HOST_IP_CATFOOD;
     private static final String IMAP_EXTERNAL_PORT_ON_DOMAIN = "5555";
     private static final String IMAP_SSL_EXTERNAL_HOST_ON_DOMAIN = TEST_HOST_DOGFOOD;
-    private static final String IMAP_SSL_EXTERNAL_HOST_IP_ON_DOMAIN = TEST_HOST_IP_DOGFOOD;
+    private static String IMAP_SSL_EXTERNAL_HOST_IP_ON_DOMAIN = TEST_HOST_IP_DOGFOOD;
     private static final String IMAP_SSL_EXTERNAL_PORT_ON_DOMAIN = "6666";
     private static final String POP3_EXTERNAL_HOST_ON_DOMAIN = TEST_HOST_DOGFOOD;
-    private static final String POP3_EXTERNAL_HOST_IP_ON_DOMAIN = TEST_HOST_IP_DOGFOOD;
+    private static String POP3_EXTERNAL_HOST_IP_ON_DOMAIN = TEST_HOST_IP_DOGFOOD;
     private static final String POP3_EXTERNAL_PORT_ON_DOMAIN = "7777";
     private static final String POP3_SSL_EXTERNAL_HOST_ON_DOMAIN = TEST_HOST_CATFOOD;
-    private static final String POP3_SSL_EXTERNAL_HOST_IP_ON_DOMAIN = TEST_HOST_IP_CATFOOD;
+    private static String POP3_SSL_EXTERNAL_HOST_IP_ON_DOMAIN = TEST_HOST_IP_CATFOOD;
     private static final String POP3_SSL_EXTERNAL_PORT_ON_DOMAIN = "8888";
 
     private static final String STATUS_OK = "OK";
@@ -124,6 +139,13 @@ public class TestNginxLookup {
     private static String SYSTEM_DEFAULT_DOMAIN;
     private static String ACCT_FOREIGN_PRINCIPAL;
     private static String ACCT2_FOREIGN_PRINCIPAL;
+    private static List<Account> accts = new ArrayList<Account>();
+    private static Account testAcct = null;
+    private static Account testAcct1 = null;
+    private static Account testAcct2 = null;
+    private static Account childAcct = null;
+    private static Account parentAcct = null;
+    private static List<Domain> domains = new ArrayList<Domain>();
 
     public static class Result {
         public Result(String status, String server, String port, String user, String wait, String password) {
@@ -140,9 +162,9 @@ public class TestNginxLookup {
         }
 
         void verify(String status, String server, String port, String user, String wait, boolean hasAuthToken) {
-            assertEquals(status, mStatus);
-            assertEquals(server, mServer);
-            assertEquals(port, mPort);
+            assertEquals("status not as expected", status, mStatus);
+            assertEquals("server not as expected", server, mServer);
+            assertEquals("port not as expected", port, mPort);
 
             /*
              * Strange, user should only be returned when the actual user name(email) is different
@@ -173,21 +195,41 @@ public class TestNginxLookup {
         mSoapProv.modifyAttrs(config, attrs);
     }
 
-    @BeforeClass
-    public static void init() throws Exception {
+    @Before
+    public void setUp() throws Exception {
 
-        CliUtil.toolSetup();
+        if (!TestUtil.fromRunUnitTests) {
+            CliUtil.toolSetup();
+        }
         mSoapProv = new SoapProvisioning();
-        mSoapProv.soapSetURI("https://localhost:7071" + AdminConstants.ADMIN_SERVICE_URI);
+        Server localServer = prov.getLocalServer();
+        mSoapProv.soapSetURI(URLUtil.getAdminURL(localServer, AdminConstants.ADMIN_SERVICE_URI, true));
         mSoapProv.soapZimbraAdminAuthenticate();
 
-        String TEST_ID = TestProvisioningUtil.genTestId();
+        String TEST_ID = name.getMethodName().toLowerCase();
         String TEST_NAME = "test-nginxlookup";
 
         DOMAIN = TestProvisioningUtil.baseDomainName(TEST_NAME, TEST_ID);
 
         // revert reverse proxy config to defaults
         unsetLookupByForeignPrincipal();
+
+        InetAddress IP = InetAddress.getLocalHost();
+        IMAP_HOST_IP = IP.getHostAddress();
+        IMAP_SSL_HOST_IP = IP.getHostAddress();
+        POP3_HOST_IP = IP.getHostAddress();
+        POP3_SSL_HOST_IP = IP.getHostAddress();
+        HTTP_HOST_IP = IP.getHostAddress();
+        TEST_HOST_IP_DOGFOOD = InetAddress.getByName(TEST_HOST_DOGFOOD).getHostAddress();
+        TEST_HOST_IP_CATFOOD = InetAddress.getByName(TEST_HOST_CATFOOD).getHostAddress();
+        IMAP_EXTERNAL_HOST_IP = TEST_HOST_IP_DOGFOOD;
+        IMAP_SSL_EXTERNAL_HOST_IP = TEST_HOST_IP_CATFOOD;
+        POP3_EXTERNAL_HOST_IP = TEST_HOST_IP_CATFOOD;
+        POP3_SSL_EXTERNAL_HOST_IP = TEST_HOST_IP_DOGFOOD;
+        IMAP_EXTERNAL_HOST_IP_ON_DOMAIN = TEST_HOST_IP_CATFOOD;
+        IMAP_SSL_EXTERNAL_HOST_IP_ON_DOMAIN = TEST_HOST_IP_DOGFOOD;
+        POP3_EXTERNAL_HOST_IP_ON_DOMAIN = TEST_HOST_IP_DOGFOOD;
+        POP3_SSL_EXTERNAL_HOST_IP_ON_DOMAIN = TEST_HOST_IP_CATFOOD;
 
         SYSTEM_DEFAULT_DOMAIN = mSoapProv.getConfig().getAttr(Provisioning.A_zimbraDefaultDomainName);
         ACCT_EMAIL = ACCT_LOCALPART + "@" + DOMAIN;
@@ -201,36 +243,45 @@ public class TestNginxLookup {
         DOMAIN_VIRTUAL_IP = fmt.format(new Date());
         domainAttrs.put(Provisioning.A_zimbraVirtualIPAddress, DOMAIN_VIRTUAL_IP);
         Domain domain = mSoapProv.createDomain(DOMAIN, domainAttrs);
-        assertNotNull(domain);
+        assertNotNull(String.format("Unable to create domain %s during setup", DOMAIN), domain);
+        domains.add(domain);
 
         // create the test account
         ACCT_FOREIGN_PRINCIPAL = FOREIGN_ID + "@" + DOMAIN;
         Map<String, Object> acctAttrs = new HashMap<String, Object>();
         acctAttrs.put(Provisioning.A_zimbraForeignPrincipal, ACCT_FOREIGN_PRINCIPAL);
-        Account acct = mSoapProv.createAccount(ACCT_EMAIL, PASSWORD, acctAttrs);
-        assertNotNull(acct);
+        testAcct = mSoapProv.createAccount(ACCT_EMAIL, PASSWORD, acctAttrs);
+        assertNotNull(String.format("Unable to create account %s during setup", ACCT_EMAIL), testAcct);
+        accts.add(testAcct);
 
-        /*
-         * ACCT1: account in the default domain with the same local part as ACCT, no foreign principal
-         *
-         * create ACCT1 if it does not exist yet
-         */
-        Account acct1 = mSoapProv.get(AccountBy.name, ACCT1_EMAIL);
-        if (acct1 == null) {
-            acct1 = mSoapProv.createAccount(ACCT1_EMAIL, PASSWORD, null);
-            assertNotNull(acct1);
-        }
+        /* ACCT1: account in the default domain with the same local part as ACCT, no foreign principal */
+        testAcct1 = mSoapProv.createAccount(ACCT1_EMAIL, PASSWORD, null);
+        assertNotNull(String.format("Unable to create account %s during setup", ACCT1_EMAIL), testAcct1);
+        accts.add(testAcct1);
 
         // setup external route for the accout
-        setupAccountExternalRoute(acct);
+        setupAccountExternalRoute(testAcct);
 
+        testAcct2 = mSoapProv.createAccount(ACCT2_EMAIL, PASSWORD, null);
+        assertNotNull(String.format("Unable to create account %s during setup", ACCT2_EMAIL), testAcct2);
+        accts.add(testAcct2);
         // set foreign id for an account in the system default domain
         acctAttrs.clear();
         ACCT2_FOREIGN_PRINCIPAL = FOREIGN_ID + "@" +SYSTEM_DEFAULT_DOMAIN;
         acctAttrs.put(Provisioning.A_zimbraForeignPrincipal, ACCT2_FOREIGN_PRINCIPAL);
-        Account acct2 = mSoapProv.get(AccountBy.name, ACCT2_EMAIL);
-        assertNotNull(acct2);
-        mSoapProv.modifyAttrs(acct2, acctAttrs);
+        mSoapProv.modifyAttrs(testAcct2, acctAttrs);
+    }
+
+    @After
+    public void shutdown() throws Exception {
+        for (Account acct : accts) {
+            deleteAccount(acct);
+        }
+        accts.clear();
+        for (Domain dom : domains) {
+            deleteDomain(dom);
+        }
+        domains.clear();
     }
 
     // revert reverse proxy config to defaults
@@ -249,19 +300,19 @@ public class TestNginxLookup {
     }
 
     private void unsetAccountExternalRouteFlag(String acctEmail) throws Exception {
-        Account acct = mSoapProv.get(AccountBy.name, acctEmail);
-        assertNotNull(acct);
+        testAcct = mSoapProv.get(AccountBy.name, acctEmail);
+        assertNotNull(testAcct);
         Map<String, Object> attrs = new HashMap<String, Object>();
         attrs.put(Provisioning.A_zimbraReverseProxyUseExternalRoute, "");
-        mSoapProv.modifyAttrs(acct, attrs);
+        mSoapProv.modifyAttrs(testAcct, attrs);
     }
 
     private void setAccountExternalRouteFlag(String acctEmail) throws Exception {
-        Account acct = mSoapProv.get(AccountBy.name, acctEmail);
-        assertNotNull(acct);
+        testAcct = mSoapProv.get(AccountBy.name, acctEmail);
+        assertNotNull(testAcct);
         Map<String, Object> attrs = new HashMap<String, Object>();
         attrs.put(Provisioning.A_zimbraReverseProxyUseExternalRoute, "TRUE");
-        mSoapProv.modifyAttrs(acct, attrs);
+        mSoapProv.modifyAttrs(testAcct, attrs);
     }
 
     private static void setupAccountExternalRoute(Account acct) throws Exception {
@@ -341,6 +392,7 @@ public class TestNginxLookup {
             attrs.put(Provisioning.A_zimbraExternalImapSSLHostname, IMAP_SSL_EXTERNAL_HOST_ON_DOMAIN);
 
             domain = mSoapProv.createDomain(domainName, attrs);
+            domains.add(domain);
         }
         assertNotNull(domain);
         return domain;
@@ -351,8 +403,9 @@ public class TestNginxLookup {
         String domainName = "external-route." + DOMAIN;
         setupExternalRouteDomain(domainName);
 
-        String acctEmail = "user1@" + domainName;
+        String acctEmail = "nginx-lookup-user1@" + domainName;
         Account acct = mSoapProv.createAccount(acctEmail, PASSWORD, null);
+        accts.add(acct);
 
         setAccountExternalRouteFlag(acctEmail);
         setupAccountExternalRoute(acct);
@@ -372,8 +425,9 @@ public class TestNginxLookup {
         String domainName = "external-route." + DOMAIN;
         setupExternalRouteDomain(domainName);
 
-        String acctEmail = "user2@" + domainName;
+        String acctEmail = "nginx-lookup-user2@" + domainName;
         Account acct = mSoapProv.createAccount(acctEmail, PASSWORD, null);
+        accts.add(acct);
 
         setAccountExternalRouteFlag(acctEmail);
 
@@ -403,10 +457,10 @@ public class TestNginxLookup {
     @Test
     public void testExternalRouteMissingExternalRouteInfo() throws Exception {
         String domainName = "external-route-missing-info." + DOMAIN;
-        Domain domain = mSoapProv.createDomain(domainName, null);  // create the domain with no external route info
+        domains.add(mSoapProv.createDomain(domainName, null));  // create the domain with no external route info
 
         String acctEmail = "user@" + domainName;
-        Account acct = mSoapProv.createAccount(acctEmail, PASSWORD, null);  // create the account with no external route info
+        accts.add(mSoapProv.createAccount(acctEmail, PASSWORD, null));  // create account with no external route info
 
         setAccountExternalRouteFlag(acctEmail);  // turn on the use external route flag on account
 
@@ -513,6 +567,7 @@ public class TestNginxLookup {
         unsetLookupByForeignPrincipal();
     }
 
+    @Ignore("Needs Kerberos realm setup")
     @Test
     public void testGssApi() throws Exception {
 
@@ -523,7 +578,7 @@ public class TestNginxLookup {
 
         // domain
         String domainName = DOMAIN;
-        Domain domain = mSoapProv.get(Key.DomainBy.name, domainName);
+        Domain testDomain = mSoapProv.get(Key.DomainBy.name, domainName);
 
         // test account names
         String acctLocalPart = "gssapi-test";
@@ -548,14 +603,14 @@ public class TestNginxLookup {
         String clientIp = "11.22.33.44"; // doesn't really matter
 
         // create test accounts
-        mSoapProv.createAccount(acctEmail, PASSWORD, null);
-        mSoapProv.createAccount(otherAcctEmail, PASSWORD, null);
+        accts.add(mSoapProv.createAccount(acctEmail, PASSWORD, null));
+        accts.add(mSoapProv.createAccount(otherAcctEmail, PASSWORD, null));
 
         // setup domain
         Map<String, Object> attrs = new HashMap<String, Object>();
         attrs.put(Provisioning.A_zimbraAuthKerberos5Realm, krb5Realm);
         attrs.put(Provisioning.A_zimbraVirtualIPAddress, nginxServerIp);
-        mSoapProv.modifyAttrs(domain, attrs);
+        mSoapProv.modifyAttrs(testDomain, attrs);
 
         // setup global config
         Config config = mSoapProv.getConfig();
@@ -566,15 +621,16 @@ public class TestNginxLookup {
         // family mailbox
         String childLocalPart = "child";
         String childEmail = childLocalPart +  "@" + domainName;
-        Account child = mSoapProv.createAccount(childEmail, PASSWORD, null);
+        childAcct = mSoapProv.createAccount(childEmail, PASSWORD, null);
+        accts.add(childAcct);
 
         String parentLocalPart = "parent";
         String parentEmail = parentLocalPart + "@" + domainName;
         String parentKrb5Principal = parentLocalPart + "@" + krb5Realm;
         attrs.clear();
-        attrs.put(Provisioning.A_zimbraChildAccount, child.getId());
-        Account parent = mSoapProv.createAccount(parentEmail, PASSWORD, attrs);
-
+        attrs.put(Provisioning.A_zimbraChildAccount, childAcct.getId());
+        parentAcct = mSoapProv.createAccount(parentEmail, PASSWORD, attrs);
+        accts.add(parentAcct);
 
         doTest("gssapi",  acctLocalPart,      null,  "imap",  "1",  clientIp,  nginxServerIp,  null,  acctKrb5Principal,  adminAcct,  adminPassword).
                 verify(STATUS_OK, IMAP_HOST_IP, IMAP_PORT, acctEmail, null);
@@ -611,6 +667,7 @@ public class TestNginxLookup {
         mSoapProv.modifyAttrs(config, attrs);
     }
 
+    @Ignore("Needs proper certificate installation")
     @Test
     public void testCertAuth() throws Exception {
         // admin account
@@ -642,7 +699,7 @@ public class TestNginxLookup {
         mSoapProv.modifyAttrs(config, attrs);
     }
 
-    private static Result doLookupReq(HttpClient client, GetMethod method) {
+    private Result doLookupReq(HttpClient client, GetMethod method) {
         try {
             int statusCode = client.executeMethod(method);
 
@@ -661,17 +718,17 @@ public class TestNginxLookup {
                               authPassword==null?null:authPassword.getValue());
 
         } catch (IOException e) {
-            e.printStackTrace();
+            ZimbraLog.test.error("Failed to do Lookup request for test %s", name.getMethodName(), e);
         }
 
         return null;
     }
 
-    private static Result doTest(String user, String pass, String serverIp, String protocol) {
+    private Result doTest(String user, String pass, String serverIp, String protocol) {
         return doTest("plain", user, pass, protocol, null, null, serverIp, null, null, null, null);
     }
 
-    private static Result doTest(String h_AUTH_METHOD,
+    private Result doTest(String h_AUTH_METHOD,
                                  String h_AUTH_USER,
                                  String h_AUTH_PASS,
                                  String h_AUTH_PROTOCOL,
@@ -741,6 +798,19 @@ public class TestNginxLookup {
         return in.replaceAll("%25", "%").replaceAll("%20", " ");
     }
 
+    private void deleteAccount(Account acct) throws ServiceException {
+        if (acct == null) {
+            return;
+        }
+        prov.deleteAccount(acct.getId());
+    }
+
+    private void deleteDomain(Domain domain) throws ServiceException {
+        if (domain == null) {
+            return;
+        }
+        prov.deleteDomain(domain.getId());
+    }
 
     /*
     public static void main(String args[]) {
