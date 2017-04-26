@@ -1046,7 +1046,9 @@ public class NginxLookupExtension implements ZimbraExtension {
                         if (doDnsLookup) {
                             upstreamHost = this.getIPByIPMode(upstreamHost).getHostAddress();
                         }
-                        String upstreamPort = req.proto.equals(IMAP) ? imapServer.getImapBindPortAsString() : imapServer.getImapSSLBindPortAsString();
+                        String upstreamPort = req.proto.equals(IMAP) ?
+                                imapServer.getRemoteImapBindPortAsString() :
+                                imapServer.getRemoteImapSSLBindPortAsString();
                         DomainExternalRouteInfo domain = getDomainExternalRouteInfo(zlc, config, authUserWithRealDomainName);
                         boolean extRouteIncludeOrigAuthuser = domain == null ?
                                 prov.getDefaultDomain().isReverseProxyExternalRouteIncludeOriginalAuthusername() :
