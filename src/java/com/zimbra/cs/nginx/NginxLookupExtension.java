@@ -880,13 +880,19 @@ public class NginxLookupExtension implements ZimbraExtension {
 
         private Server lookupUpstreamImapServer(NginxLookupRequest req) throws ServiceException {
             ImapLoadBalancingMechanism LBMech = ImapLoadBalancingMechanism.newInstance();
-            Server server = prov.getLocalServer();
-            String[] imapServerAddrs;
-            if (server != null) {
-                imapServerAddrs = server.getReverseProxyUpstreamImapServers();
-            } else {
-                imapServerAddrs = prov.getConfig().getReverseProxyUpstreamImapServers();
+            String[] imapServerAddrs = null;
+            Account acct = prov.get(AccountBy.name, req.user);
+            if (acct != null) {
+                Server server = acct.getServer();
+                if (server != null) {
+                    imapServerAddrs = server.getReverseProxyUpstreamImapServers();
+
+                    if (imapServerAddrs == null || imapServerAddrs.length == 0) {
+                        imapServerAddrs = new String[]{server.getServiceHostname()};
+                    }
+                }
             }
+
             List<Server> imapServers = new LinkedList<Server>();
             for (String host: imapServerAddrs) {
                 try {
