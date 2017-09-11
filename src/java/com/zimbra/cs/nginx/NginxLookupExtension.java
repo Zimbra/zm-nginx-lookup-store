@@ -119,6 +119,7 @@ public class NginxLookupExtension implements ZimbraExtension {
             // Expected in production, because JUnit is not available.
             ZimbraLog.test.debug("Unable to load TestClientUploader unit tests.", e);
         }
+
     }
 
     @Override
@@ -159,7 +160,7 @@ public class NginxLookupExtension implements ZimbraExtension {
         }
     }
 
-    private static class NginxLookupRequest {
+    public static class NginxLookupRequest {
         String user;
         String cuser;
         String pass;
@@ -758,7 +759,6 @@ public class NginxLookupExtension implements ZimbraExtension {
             cUser = req.cuser;              /* AUTHC (if GSSAPI) */
             qUser = aUser;                  /* Qualified AUTHZ (defaults to AUTHZ) */
 
-            Provisioning prov = Provisioning.getInstance();
             Account gssapiAuthC = null;
 
             if (req.authMethod.equalsIgnoreCase(AUTHMETH_ZIMBRAID)) {
@@ -880,13 +880,19 @@ public class NginxLookupExtension implements ZimbraExtension {
 
         private Server lookupUpstreamImapServer(NginxLookupRequest req) throws ServiceException {
             ImapLoadBalancingMechanism LBMech = ImapLoadBalancingMechanism.newInstance();
-            Server server = prov.getLocalServer();
-            String[] imapServerAddrs;
-            if (server != null) {
-                imapServerAddrs = server.getReverseProxyUpstreamImapServers();
-            } else {
-                imapServerAddrs = prov.getConfig().getReverseProxyUpstreamImapServers();
+            String[] imapServerAddrs = {};
+            Account acct = prov.get(AccountBy.name, req.user);
+            if (acct != null) {
+                Server server = acct.getServer();
+                if (server != null) {
+                    imapServerAddrs = server.getReverseProxyUpstreamImapServers();
+
+                    if (imapServerAddrs == null || imapServerAddrs.length == 0) {
+                        imapServerAddrs = new String[]{server.getServiceHostname()};
+                    }
+                }
             }
+
             List<Server> imapServers = new LinkedList<Server>();
             for (String host: imapServerAddrs) {
                 try {
@@ -908,7 +914,6 @@ public class NginxLookupExtension implements ZimbraExtension {
             try {
                 zlc = helper.getLdapContext();
 
-                Provisioning prov = Provisioning.getInstance();
                 Config config = prov.getConfig();
                 String authUser = getQualifiedUsername(zlc, config, req);
 

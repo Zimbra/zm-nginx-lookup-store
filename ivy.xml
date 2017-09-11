@@ -10,6 +10,27 @@
   <dependency org="commons-httpclient" name="commons-httpclient" rev="3.1" />
   <dependency org="commons-logging" name="commons-logging" rev="1.0" />
   <dependency org="commons-net" name="commons-net" rev="3.3" />
+  <dependency org="org.javassist" name="javassist" rev="3.22.0-CR2" />
+  <dependency org="org.objenesis" name="objenesis" rev="2.6" />
+  <dependency org="org.json" name="json" rev="20090211" />
+  <dependency org="cglib" name="cglib" rev="3.2.5"/>
+  <dependency org="asm" name="asm" rev="3.3.1"/>
+  <dependency org="dom4j" name="dom4j" rev="1.6.1"/>
+  <dependency org="log4j" name="log4j" rev="1.2.17"/>
+  <dependency org="com.google.guava" name="guava" rev="13.0.1" />
+  <dependency org="com.unboundid" name="unboundid-ldapsdk" rev="4.0.0"/>
+  <dependency org="org.easymock" name="easymock" rev="3.4" />
+  <dependency org="org.powermock" name="powermock-core" rev="1.7.1" />
+  <dependency org="org.powermock" name="powermock-api-mockito" rev="1.7.1" />
+  <dependency org="org.powermock" name="powermock-api-mockito2" rev="1.7.1" />
+  <dependency org="org.powermock" name="powermock-api-easymock" rev="1.7.1" />
+  <dependency org="org.powermock" name="powermock-module-junit4" rev="1.7.1" />
+  <dependency org="org.powermock" name="powermock-module-junit4-common" rev="1.7.1" />
+  <dependency org="org.powermock" name="powermock-api-support" rev="1.7.1" />
+  <dependency org="org.powermock" name="powermock-reflect" rev="1.7.1" />
+  <dependency org="org.mockito" name="mockito-core" rev="2.8.47" />
+  <dependency org="org.javassist" name="javassist" rev="3.18.2-GA" />
+  <!-- copy dependencies from zm-mailbox/store -->
   <dependency org="zimbra" name="zm-client" rev="latest.integration" />
   <dependency org="zimbra" name="zm-common" rev="latest.integration" />
   <dependency org="zimbra" name="zm-soap" rev="latest.integration" />
