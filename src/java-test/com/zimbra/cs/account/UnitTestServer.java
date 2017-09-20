@@ -1,7 +1,5 @@
 package com.zimbra.cs.account;
 
-import com.zimbra.cs.account.Server;
-
 public class UnitTestServer extends Server {
     private String[] reverseProxyUpstreamImapServers = null;
     private String hostname = null;
@@ -25,5 +23,25 @@ public class UnitTestServer extends Server {
     public String toString()
     {
         return "UnitTestServer(" + this.hostname + ")";
+    }
+
+    @Override
+    public String getImapBindPortAsString() {
+        return "imap-internal";
+    }
+
+    @Override
+    public String getImapSSLBindPortAsString() {
+        return "imaps-internal";
+    }
+
+    @Override
+    public String getRemoteImapBindPortAsString() {
+        return "imap-remote";
+    }
+
+    @Override
+    public String getRemoteImapSSLBindPortAsString() {
+        return "imaps-remote";
     }
 }

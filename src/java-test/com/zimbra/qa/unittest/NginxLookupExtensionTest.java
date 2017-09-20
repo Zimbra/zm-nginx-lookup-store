@@ -18,13 +18,20 @@
 package com.zimbra.qa.unittest;
 
 import com.zimbra.common.account.Key;
-import com.zimbra.cs.account.*;
+import com.zimbra.common.util.Pair;
+import com.zimbra.cs.account.Account;
+import com.zimbra.cs.account.AttributeManager;
 import com.zimbra.cs.account.Config;
 import com.zimbra.cs.account.Entry;
+import com.zimbra.cs.account.Provisioning;
+import com.zimbra.cs.account.Server;
+import com.zimbra.cs.account.UnitTestAccount;
+import com.zimbra.cs.account.UnitTestServer;
 import com.zimbra.cs.account.ldap.LdapProv;
 import com.zimbra.cs.account.ldap.LdapProvisioning;
 import com.zimbra.cs.imap.ImapLoadBalancingMechanism;
 import com.zimbra.cs.nginx.NginxLookupExtension;
+
 import junit.framework.TestCase;
 import org.junit.Before;
 import org.junit.Test;
@@ -97,7 +104,7 @@ public class NginxLookupExtensionTest extends TestCase {
 
         PowerMock.replayAll();
 
-        Server server = Whitebox.invokeMethod(handler, "lookupUpstreamImapServer", request);
+        Pair<Server, Boolean> server = Whitebox.invokeMethod(handler, "lookupUpstreamImapServer", request);
         assertEquals("Server objects should be null", null, server);
         PowerMock.verifyAll();
     }
@@ -139,8 +146,8 @@ public class NginxLookupExtensionTest extends TestCase {
 
         PowerMock.replayAll();
 
-        Server server = Whitebox.invokeMethod(handler, "lookupUpstreamImapServer", request);
-        assertEquals("Server objects should be the same", testServer, server);
+        Pair<Server, Boolean> server = Whitebox.invokeMethod(handler, "lookupUpstreamImapServer", request);
+        assertEquals("Server objects should be the same", testServer, server.getFirst());
 
         PowerMock.verifyAll();
     }
@@ -177,10 +184,28 @@ public class NginxLookupExtensionTest extends TestCase {
 
         PowerMock.replayAll();
 
-        Server server = Whitebox.invokeMethod(mockHandler, "lookupUpstreamImapServer", mockRequest);
-        assertEquals("Server objects should be the same", testServer, server);
+        Pair<Server, Boolean> server = Whitebox.invokeMethod(mockHandler, "lookupUpstreamImapServer", mockRequest);
+        assertEquals("Server objects should be the same", testServer, server.getFirst());
 
         PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testGetUpstreamIMAPPort() throws Exception {
+        NginxLookupExtension.NginxLookupHandler mockHandler = Whitebox.newInstance(NginxLookupExtension.NginxLookupHandler.class);
+        Server mockServer = Whitebox.newInstance(UnitTestServer.class);
+
+      // internal imap
+        String portString = Whitebox.invokeMethod(mockHandler, "getUpstreamIMAPPort", mockServer, "imap", false);
+        assertEquals("imap-internal", portString);
+        portString = Whitebox.invokeMethod(mockHandler, "getUpstreamIMAPPort", mockServer, "imaps", false);
+        assertEquals("imaps-internal", portString);
+
+        // remote imap
+        portString = Whitebox.invokeMethod(mockHandler, "getUpstreamIMAPPort", mockServer, "imap", true);
+        assertEquals("imap-remote", portString);
+        portString = Whitebox.invokeMethod(mockHandler, "getUpstreamIMAPPort", mockServer, "imaps", true);
+        assertEquals("imaps-remote", portString);
     }
 
 }
