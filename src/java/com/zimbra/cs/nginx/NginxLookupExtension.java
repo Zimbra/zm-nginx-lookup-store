@@ -49,6 +49,7 @@ import com.zimbra.common.account.ZAttrProvisioning.IPMode;
 import com.zimbra.common.localconfig.LC;
 import com.zimbra.common.service.ServiceException;
 import com.zimbra.common.util.Constants;
+import com.zimbra.common.util.Pair;
 import com.zimbra.common.util.StringUtil;
 import com.zimbra.common.util.ZimbraLog;
 import com.zimbra.cs.account.AccessManager;
@@ -878,17 +879,29 @@ public class NginxLookupExtension implements ZimbraExtension {
             return domain;
         }
 
-        private Server lookupUpstreamImapServer(NginxLookupRequest req) throws ServiceException {
+        /**
+         * This function returns the most appropriate 'Server' to handle the IMAP request.
+         * It returns a pair of Server instance and a flag denoting if the Server is running IMAPD and IMAPD should
+         * be used to process the request.
+         * @param req
+         * @return Pair of Server, RemoteImapEnabled? where the second element is a boolean flag where true denotes Remote IMAP is to be used.
+         * @throws ServiceException
+         */
+        private Pair<Server, Boolean> lookupUpstreamImapServer(NginxLookupRequest req) throws ServiceException {
             ImapLoadBalancingMechanism LBMech = ImapLoadBalancingMechanism.newInstance();
+            HashMap<String, Boolean> servers = new HashMap<>();
             String[] imapServerAddrs = {};
             Account acct = prov.get(AccountBy.name, req.user);
             if (acct != null) {
                 Server server = acct.getServer();
                 if (server != null) {
                     imapServerAddrs = server.getReverseProxyUpstreamImapServers();
-
                     if (imapServerAddrs == null || imapServerAddrs.length == 0) {
                         imapServerAddrs = new String[]{server.getServiceHostname()};
+                        servers.put(server.getServiceHostname(), false);
+                    } else {
+                        // This 'Server' is configured to use Remote IMAPD.
+                        servers.put(server.getServiceHostname(), true);
                     }
                 }
             }
@@ -905,7 +918,16 @@ public class NginxLookupExtension implements ZimbraExtension {
             if (imapServers.isEmpty()) {
                 return null;
             } else {
-                return LBMech.getImapServerFromPool(req.httpReq, imapServers);
+                Server server = LBMech.getImapServerFromPool(req.httpReq, imapServers);
+                return new Pair<>(server, servers.get(server.getServiceHostname()));
+            }
+        }
+
+        private String getUpstreamIMAPPort(Server server, String proto, Boolean useRemoteImap) throws ServiceException {
+            if (useRemoteImap){
+                return proto.equals(IMAP) ? server.getRemoteImapBindPortAsString() : server.getRemoteImapSSLBindPortAsString();
+            } else {
+                return proto.equals(IMAP) ? server.getImapBindPortAsString() : server.getImapSSLBindPortAsString();
             }
         }
 
@@ -1045,15 +1067,14 @@ public class NginxLookupExtension implements ZimbraExtension {
 
                 //check to see if an IMAP request should be routed to an upstream IMAP server
                 if (req.proto.equals(IMAP) || req.proto.equals(IMAP_SSL)) {
-                    Server imapServer = lookupUpstreamImapServer(req);
+                    Pair<Server, Boolean> imapServer = lookupUpstreamImapServer(req);
+
                     if (imapServer != null) {
-                        String upstreamHost = imapServer.getServiceHostname();
+                        String upstreamHost = imapServer.getFirst().getServiceHostname();
                         if (doDnsLookup) {
                             upstreamHost = this.getIPByIPMode(upstreamHost).getHostAddress();
                         }
-                        String upstreamPort = req.proto.equals(IMAP) ?
-                                imapServer.getRemoteImapBindPortAsString() :
-                                imapServer.getRemoteImapSSLBindPortAsString();
+                        String upstreamPort = getUpstreamIMAPPort(imapServer.getFirst(), req.proto, imapServer.getSecond());
                         DomainExternalRouteInfo domain = getDomainExternalRouteInfo(zlc, config, authUserWithRealDomainName);
                         boolean extRouteIncludeOrigAuthuser = domain == null ?
                                 prov.getDefaultDomain().isReverseProxyExternalRouteIncludeOriginalAuthusername() :
