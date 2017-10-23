@@ -889,7 +889,7 @@ public class NginxLookupExtension implements ZimbraExtension {
          */
         private Pair<Server, Boolean> lookupUpstreamImapServer(NginxLookupRequest req) throws ServiceException {
             ImapLoadBalancingMechanism LBMech = ImapLoadBalancingMechanism.newInstance();
-            HashMap<String, Boolean> servers = new HashMap<>();
+            boolean usingRemoteImapDaemon = true /* initial assumption */;
             String[] imapServerAddrs = {};
             Account acct = prov.get(AccountBy.name, req.user);
             if (acct != null) {
@@ -897,11 +897,9 @@ public class NginxLookupExtension implements ZimbraExtension {
                 if (server != null) {
                     imapServerAddrs = server.getReverseProxyUpstreamImapServers();
                     if (imapServerAddrs == null || imapServerAddrs.length == 0) {
+                        /* Must be using the embedded IMAP on the mailbox server */
+                        usingRemoteImapDaemon = false;
                         imapServerAddrs = new String[]{server.getServiceHostname()};
-                        servers.put(server.getServiceHostname(), false);
-                    } else {
-                        // This 'Server' is configured to use Remote IMAPD.
-                        servers.put(server.getServiceHostname(), true);
                     }
                 }
             }
@@ -916,10 +914,15 @@ public class NginxLookupExtension implements ZimbraExtension {
                 }
             }
             if (imapServers.isEmpty()) {
+                ZimbraLog.nginxlookup.trace("No available IMAP servers found for acct '%s'", req.user);
                 return null;
             } else {
-                Server server = LBMech.getImapServerFromPool(req.httpReq, imapServers);
-                return new Pair<>(server, servers.get(server.getServiceHostname()));
+                //  make sure accountID is not null
+                String accountID = acct != null ? acct.getId() : req.user;
+                Server server = LBMech.getImapServerFromPool(req.httpReq, accountID, imapServers);
+                ZimbraLog.nginxlookup.trace("Use IMAP daemon server '%s' for acct '%s' (%s)",
+                        server, req.user, accountID);
+                return new Pair<>(server, usingRemoteImapDaemon);
             }
         }
 
