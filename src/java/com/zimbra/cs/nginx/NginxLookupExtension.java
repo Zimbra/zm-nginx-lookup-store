@@ -908,9 +908,13 @@ public class NginxLookupExtension implements ZimbraExtension {
             for (String host: imapServerAddrs) {
                 try {
                     Server imapServer = prov.getServerByServiceHostname(host);
+                    if (imapServer == null) {
+                        ZimbraLog.nginxlookup.warn("cannot get imap server by service hostname for %s", host);
+                        continue;
+                    }
                     imapServers.add(imapServer);
                 } catch (ServiceException e) {
-                    ZimbraLog.nginxlookup.warn("cannot get imap server %s", host);
+                    ZimbraLog.nginxlookup.warn("cannot get imap server by service hostname - %s", host);
                 }
             }
             if (imapServers.isEmpty()) {
