@@ -18,9 +18,11 @@
 package com.zimbra.qa.unittest;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -29,8 +31,11 @@ import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.methods.GetMethod;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 
+import com.google.common.base.Joiner;
 import com.zimbra.common.account.Key;
 import com.zimbra.common.localconfig.LC;
 import com.zimbra.common.service.ServiceException;
@@ -46,7 +51,10 @@ import com.zimbra.cs.nginx.NginxLookupExtension;
  */
 public class TestNginxLookupExtension {
 
-    private static final String USER = "testnginxlookupextension-user1";
+    @Rule
+    public TestName testInfo = new TestName();
+
+    private static String USER;
     private Domain externalRouteDomain = null;
     private Account externalRouteAccount = null;
     private static String DEFAULT_DOMAIN = null;
@@ -63,6 +71,8 @@ public class TestNginxLookupExtension {
     private static final String POP3_SSL_PORT = "7995";
     private static final String IMAP_PORT     = "7143";
     private static final String IMAP_SSL_PORT = "7993";
+    private static final String IMAP_DAEMON_PORT     = "8143";
+    private static final String IMAP_DAEMON_SSL_PORT = "8993";
     private static final String HTTP_PORT     = LC.zimbra_mail_service_port.value();
 
     private enum AuthMethod {
@@ -82,31 +92,31 @@ public class TestNginxLookupExtension {
 
     private static class LookupData {
         // required
-        AuthMethod mAuthMethod;
-        String mAuthUser;
-        String mAuthPass;
-        AuthProtocol mAuthProtocol;
+        private AuthMethod mAuthMethod;
+        private String mAuthUser;
+        private String mAuthPass;
+        private AuthProtocol mAuthProtocol;
 
-        LookupData(AuthMethod authMethod, String authUser, String authPass, AuthProtocol authProtocol) {
+        protected LookupData(AuthMethod authMethod, String authUser, String authPass, AuthProtocol authProtocol) {
             setAuthMethod(authMethod);
             setAuthUser(authUser);
             setAuthPass(authPass);
             setAuthProtocol(authProtocol);
         }
 
-        void setAuthMethod(AuthMethod authMethod) {
+        protected void setAuthMethod(AuthMethod authMethod) {
             mAuthMethod = authMethod;
         }
 
-        void setAuthUser(String authUser) {
+        protected void setAuthUser(String authUser) {
             mAuthUser = authUser;
         }
 
-        void setAuthPass(String authPass) {
+        protected void setAuthPass(String authPass) {
             mAuthPass = authPass;
         }
 
-        void setAuthProtocol(AuthProtocol authProtocol) {
+        protected void setAuthProtocol(AuthProtocol authProtocol) {
             mAuthProtocol = authProtocol;
         }
 
@@ -120,7 +130,7 @@ public class TestNginxLookupExtension {
         String h_AUTH_ADMIN_PASS,
         */
 
-        void setRequestHeader(GetMethod method) {
+        protected void setRequestHeader(GetMethod method) {
             if (mAuthMethod != null)
                 method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.AUTH_METHOD, mAuthMethod.name());
             if (mAuthUser != null)
@@ -149,50 +159,64 @@ public class TestNginxLookupExtension {
     }
 
     private static class RespHeaders {
-        Map<String, String> mHeaders = new HashMap<String, String>();
+        private final Map<String, String> mHeaders = new HashMap<String, String>();
 
-        void add(Header header) {
+        protected void add(Header header) {
             mHeaders.put(header.getName(), header.getValue());
         }
 
-        String authStatus() {
+        protected String authStatus() {
             return mHeaders.get(NginxLookupExtension.NginxLookupHandler.AUTH_STATUS);
         }
 
-        String authUser() {
+        protected String authUser() {
             return mHeaders.get(NginxLookupExtension.NginxLookupHandler.AUTH_USER);
         }
 
-        String authServer() {
+        protected String authServer() {
             return mHeaders.get(NginxLookupExtension.NginxLookupHandler.AUTH_SERVER);
         }
 
-        String authPort() {
+        protected String authPort() {
             return mHeaders.get(NginxLookupExtension.NginxLookupHandler.AUTH_PORT);
         }
 
 
-        void assertAuthStatusOK() {
-            assertEquals("OK", authStatus());
+        protected void assertAuthStatusOK() {
+            assertEquals("Auth Status", "OK", authStatus());
         }
 
-        void assertAuthUser(String expected) {
-            assertEquals(expected, authUser());
+        protected void assertAuthUser(String expected) {
+            assertEquals("Auth User", expected, authUser());
         }
 
-        void assertAuthServer(String expected) {
-            assertEquals(expected, authServer());
+        protected void assertAuthServer(String expected) {
+            assertEquals("Auth server", expected, authServer());
         }
 
-        void assertAuthPort(String expected) {
-            assertEquals(expected, authPort());
+        protected void assertAuthPort(String expected) {
+            assertEquals("Auth port", expected, authPort());
         }
 
-        void assertBasic(String expectedUser, String expectedServer, String expectedPort) {
+        protected void assertAuthPort(String[] expected) {
+            String port = authPort();
+            assertTrue(String.format(
+                    "Auth port %s should be one of [%s']", port, Joiner.on(',').join(expected)),
+                    Arrays.asList(expected).contains(port));
+        }
+
+        protected void assertBasic(String expectedUser, String expectedServer, String expectedPort) {
             assertAuthStatusOK();
             assertAuthUser(expectedUser);
             assertAuthServer(expectedServer);
             assertAuthPort(expectedPort);
+        }
+
+        protected void assertBasic(String expectedUser, String expectedServer, String[] expectedPorts) {
+            assertAuthStatusOK();
+            assertAuthUser(expectedUser);
+            assertAuthServer(expectedServer);
+            assertAuthPort(expectedPorts);
         }
     }
 
@@ -207,7 +231,7 @@ public class TestNginxLookupExtension {
 
         RespHeaders respHdrs = new RespHeaders();
         try {
-            int statusCode = client.executeMethod(method);
+            client.executeMethod(method);
 
             for (Header header : method.getResponseHeaders())
                 respHdrs.add(header);
@@ -297,16 +321,17 @@ public class TestNginxLookupExtension {
 
     @Before
     public void setUp() throws Exception {
-        tearDown();
         InetAddress IP = InetAddress.getLocalHost();
         MY_IP_ADDRESS = IP.getHostAddress();
         DEFAULT_DOMAIN = AccountTestUtil.getDomain();
+        USER = testInfo.getMethodName() + "1";
         QUSER = USER + "@" +DEFAULT_DOMAIN;
+        tearDown();
     }
 
     @After
     public void tearDown() throws Exception {
-        TestUtil.deleteAccount(USER);
+        TestUtil.deleteAccountIfExists(USER);
         deleteAccount(externalRouteAccount);
         deleteDomain(externalRouteDomain);
         externalRouteAccount = null;
@@ -318,7 +343,8 @@ public class TestNginxLookupExtension {
         TestUtil.createAccount(QUSER);
         LookupData lookupData = new LookupData(AuthMethod.plain, QUSER, PASSWORD, AuthProtocol.imap);
         RespHeaders respHdrs = senRequest(lookupData);
-        respHdrs.assertBasic(QUSER, MY_IP_ADDRESS, IMAP_PORT);
+        String[] ports = {IMAP_PORT, IMAP_DAEMON_PORT};
+        respHdrs.assertBasic(QUSER, MY_IP_ADDRESS, ports);
     }
 
     @Test
@@ -326,7 +352,8 @@ public class TestNginxLookupExtension {
         TestUtil.createAccount(QUSER);
         LookupData lookupData = new LookupData(AuthMethod.plain, QUSER, PASSWORD, AuthProtocol.imapssl);
         RespHeaders respHdrs = senRequest(lookupData);
-        respHdrs.assertBasic(QUSER, MY_IP_ADDRESS, IMAP_SSL_PORT);
+        String[] ports = {IMAP_SSL_PORT, IMAP_DAEMON_SSL_PORT};
+        respHdrs.assertBasic(QUSER, MY_IP_ADDRESS, ports);
     }
 
     @Test
