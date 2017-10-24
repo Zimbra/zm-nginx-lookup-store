@@ -92,31 +92,31 @@ public class TestNginxLookupExtension {
 
     private static class LookupData {
         // required
-        AuthMethod mAuthMethod;
-        String mAuthUser;
-        String mAuthPass;
-        AuthProtocol mAuthProtocol;
+        private AuthMethod mAuthMethod;
+        private String mAuthUser;
+        private String mAuthPass;
+        private AuthProtocol mAuthProtocol;
 
-        LookupData(AuthMethod authMethod, String authUser, String authPass, AuthProtocol authProtocol) {
+        protected LookupData(AuthMethod authMethod, String authUser, String authPass, AuthProtocol authProtocol) {
             setAuthMethod(authMethod);
             setAuthUser(authUser);
             setAuthPass(authPass);
             setAuthProtocol(authProtocol);
         }
 
-        void setAuthMethod(AuthMethod authMethod) {
+        protected void setAuthMethod(AuthMethod authMethod) {
             mAuthMethod = authMethod;
         }
 
-        void setAuthUser(String authUser) {
+        protected void setAuthUser(String authUser) {
             mAuthUser = authUser;
         }
 
-        void setAuthPass(String authPass) {
+        protected void setAuthPass(String authPass) {
             mAuthPass = authPass;
         }
 
-        void setAuthProtocol(AuthProtocol authProtocol) {
+        protected void setAuthProtocol(AuthProtocol authProtocol) {
             mAuthProtocol = authProtocol;
         }
 
@@ -130,7 +130,7 @@ public class TestNginxLookupExtension {
         String h_AUTH_ADMIN_PASS,
         */
 
-        void setRequestHeader(GetMethod method) {
+        protected void setRequestHeader(GetMethod method) {
             if (mAuthMethod != null)
                 method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.AUTH_METHOD, mAuthMethod.name());
             if (mAuthUser != null)
@@ -159,60 +159,60 @@ public class TestNginxLookupExtension {
     }
 
     private static class RespHeaders {
-        Map<String, String> mHeaders = new HashMap<String, String>();
+        private final Map<String, String> mHeaders = new HashMap<String, String>();
 
-        void add(Header header) {
+        protected void add(Header header) {
             mHeaders.put(header.getName(), header.getValue());
         }
 
-        String authStatus() {
+        protected String authStatus() {
             return mHeaders.get(NginxLookupExtension.NginxLookupHandler.AUTH_STATUS);
         }
 
-        String authUser() {
+        protected String authUser() {
             return mHeaders.get(NginxLookupExtension.NginxLookupHandler.AUTH_USER);
         }
 
-        String authServer() {
+        protected String authServer() {
             return mHeaders.get(NginxLookupExtension.NginxLookupHandler.AUTH_SERVER);
         }
 
-        String authPort() {
+        protected String authPort() {
             return mHeaders.get(NginxLookupExtension.NginxLookupHandler.AUTH_PORT);
         }
 
 
-        void assertAuthStatusOK() {
+        protected void assertAuthStatusOK() {
             assertEquals("Auth Status", "OK", authStatus());
         }
 
-        void assertAuthUser(String expected) {
+        protected void assertAuthUser(String expected) {
             assertEquals("Auth User", expected, authUser());
         }
 
-        void assertAuthServer(String expected) {
+        protected void assertAuthServer(String expected) {
             assertEquals("Auth server", expected, authServer());
         }
 
-        void assertAuthPort(String expected) {
+        protected void assertAuthPort(String expected) {
             assertEquals("Auth port", expected, authPort());
         }
 
-        void assertAuthPort(String[] expected) {
+        protected void assertAuthPort(String[] expected) {
             String port = authPort();
             assertTrue(String.format(
                     "Auth port %s should be one of [%s']", port, Joiner.on(',').join(expected)),
                     Arrays.asList(expected).contains(port));
         }
 
-        void assertBasic(String expectedUser, String expectedServer, String expectedPort) {
+        protected void assertBasic(String expectedUser, String expectedServer, String expectedPort) {
             assertAuthStatusOK();
             assertAuthUser(expectedUser);
             assertAuthServer(expectedServer);
             assertAuthPort(expectedPort);
         }
 
-        void assertBasic(String expectedUser, String expectedServer, String[] expectedPorts) {
+        protected void assertBasic(String expectedUser, String expectedServer, String[] expectedPorts) {
             assertAuthStatusOK();
             assertAuthUser(expectedUser);
             assertAuthServer(expectedServer);
@@ -231,7 +231,7 @@ public class TestNginxLookupExtension {
 
         RespHeaders respHdrs = new RespHeaders();
         try {
-            int statusCode = client.executeMethod(method);
+            client.executeMethod(method);
 
             for (Header header : method.getResponseHeaders())
                 respHdrs.add(header);

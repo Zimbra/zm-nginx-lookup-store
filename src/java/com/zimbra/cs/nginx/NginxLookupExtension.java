@@ -36,9 +36,6 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import org.apache.commons.httpclient.Header;
-import org.apache.commons.httpclient.HttpClient;
-import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.net.util.SubnetUtils;
 import org.apache.commons.net.util.SubnetUtils.SubnetInfo;
 
@@ -54,7 +51,6 @@ import com.zimbra.common.util.StringUtil;
 import com.zimbra.common.util.ZimbraLog;
 import com.zimbra.cs.account.AccessManager;
 import com.zimbra.cs.account.Account;
-import com.zimbra.cs.account.AuthToken;
 import com.zimbra.cs.account.AuthTokenException;
 import com.zimbra.cs.account.CacheExtension;
 import com.zimbra.cs.account.Config;
@@ -162,21 +158,21 @@ public class NginxLookupExtension implements ZimbraExtension {
     }
 
     public static class NginxLookupRequest {
-        String user;
-        String cuser;
-        String pass;
-        String proto;
-        String authMethod;
-        String clientIp;
-        String serverIp;
-        String serverHost;
-        String principal;
-        int loginAttempt;
-        boolean isZimbraAdmin;
-        String adminUser;
-        String adminPass;
-        HttpServletRequest  httpReq;
-        HttpServletResponse httpResp;
+        protected String user;
+        protected String cuser;
+        protected String pass;
+        protected String proto;
+        protected String authMethod;
+        protected String clientIp;
+        protected String serverIp;
+        protected String serverHost;
+        protected String principal;
+        protected int loginAttempt;
+        protected boolean isZimbraAdmin;
+        protected String adminUser;
+        protected String adminPass;
+        protected HttpServletRequest  httpReq;
+        protected HttpServletResponse httpResp;
     }
 
     public static class NginxLookupHandler extends ExtensionHttpHandler {
@@ -420,14 +416,15 @@ public class NginxLookupExtension implements ZimbraExtension {
          * This method changes the separator to ",", trim the first "/" and make
          * "emailAddress" to "EMAILADDRESS"
          */
-        private static String unifyDNFormat(String dn) {
-        	if (dn.startsWith("/")) {
-        		dn = dn.substring(1); //trim the first "/"
-        	}
+        private static String unifyDNFormat(String origDn) {
+            String dn = origDn;
+            if (dn.startsWith("/")) {
+                dn = dn.substring(1); //trim the first "/"
+            }
 
-        	dn = dn.replace("/", ",");
-        	dn = dn.replace("emailAddress", "EMAILADDRESS");
-        	return dn;
+            dn = dn.replace("/", ",");
+            dn = dn.replace("emailAddress", "EMAILADDRESS");
+            return dn;
         }
 
         /**
@@ -754,11 +751,9 @@ public class NginxLookupExtension implements ZimbraExtension {
          */
         private String getQualifiedUsername(ILdapContext zlc, Config config, NginxLookupRequest req)
         throws ServiceException, NginxLookupException {
-            String aUser, cUser, qUser;
-
-            aUser = req.user;               /* AUTHZ (whose route is being discovered) */
-            cUser = req.cuser;              /* AUTHC (if GSSAPI) */
-            qUser = aUser;                  /* Qualified AUTHZ (defaults to AUTHZ) */
+            String aUser = req.user;               /* AUTHZ (whose route is being discovered) */
+            String cUser = req.cuser;              /* AUTHC (if GSSAPI) */
+            String qUser = aUser;                  /* Qualified AUTHZ (defaults to AUTHZ) */
 
             Account gssapiAuthC = null;
 
@@ -889,7 +884,7 @@ public class NginxLookupExtension implements ZimbraExtension {
          */
         private Pair<Server, Boolean> lookupUpstreamImapServer(NginxLookupRequest req) throws ServiceException {
             ImapLoadBalancingMechanism LBMech = ImapLoadBalancingMechanism.newInstance();
-            boolean usingRemoteImapDaemon = true /* initial assumption */;
+            boolean usingRemoteImapDaemon = true; /* initial assumption */
             String[] imapServerAddrs = {};
             Account acct = prov.get(AccountBy.name, req.user);
             if (acct != null) {
@@ -1294,13 +1289,16 @@ public class NginxLookupExtension implements ZimbraExtension {
          * @param req    The HTTP request object
          * @param mailhost    The requested mail server name
          * @param port        The requested mail server port
-         * @param authUser    If not null, then this value is sent back to override the login
+         * @param origAuthUser If not null, then this value is sent back to override the login
          *                     user name, (usually) with a domain suffix added
          * @param useExternalRoute If true, then externalRouteIncludeOriginalAuthusername is checked
          *                          to return original req username unmodified
          * @param externalRouteIncludeOriginalAuthusername - include original username as requested
          */
-        private void sendResult(NginxLookupRequest req, String addr, String port, String authUser, boolean useExternalRoute, boolean externalRouteIncludeOriginalAuthusername) throws UnknownHostException {
+        private void sendResult(NginxLookupRequest req, String addr, String port, String origAuthUser,
+                boolean useExternalRoute, boolean externalRouteIncludeOriginalAuthusername)
+                        throws UnknownHostException {
+            String authUser = origAuthUser;
             ZimbraLog.nginxlookup.debug("mailhost=" + addr);
             ZimbraLog.nginxlookup.debug("port=" + port);
             ZimbraLog.nginxlookup.debug("clientIp=" + req.clientIp);
@@ -1368,6 +1366,7 @@ public class NginxLookupExtension implements ZimbraExtension {
         }
     }
 
+    /* Left in case want to re-instate the code in main which uses "test" and "doTest"
     private static void test(String user, String pass, String serverIp) {
         String url = "http://localhost:7072/service/extension/nginx-lookup";
 
@@ -1386,7 +1385,7 @@ public class NginxLookupExtension implements ZimbraExtension {
             method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.SERVER_IP, serverIp);
 
         try {
-            int statusCode = client.executeMethod(method);
+            client.executeMethod(method);
 
             Header authStatus = method.getResponseHeader(NginxLookupExtension.NginxLookupHandler.AUTH_STATUS);
             Header authServer = method.getResponseHeader(NginxLookupExtension.NginxLookupHandler.AUTH_SERVER);
@@ -1458,7 +1457,7 @@ public class NginxLookupExtension implements ZimbraExtension {
 
         boolean isOK = false;
         try {
-            int statusCode = client.executeMethod(method);
+            client.executeMethod(method);
 
             System.out.println("Response headers:");
             for (Header header : method.getResponseHeaders()) {
@@ -1494,6 +1493,7 @@ public class NginxLookupExtension implements ZimbraExtension {
 
         System.out.println("\n=========================================\n");
     }
+    */
 
     public static void main(String args[]) {
         /*
