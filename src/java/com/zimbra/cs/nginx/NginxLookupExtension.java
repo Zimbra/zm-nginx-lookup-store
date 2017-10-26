@@ -918,7 +918,7 @@ public class NginxLookupExtension implements ZimbraExtension {
             } else {
                 //  make sure accountID is not null
                 String accountID = acct != null ? acct.getId() : req.user;
-                Server server = LBMech.getImapServerFromPool(req.httpReq, imapServers);
+                Server server = LBMech.getImapServerFromPool(req.httpReq, accountID, imapServers);
                 ZimbraLog.nginxlookup.trace("Use IMAP daemon server '%s' for acct '%s' (%s)",
                         server, req.user, accountID);
                 return new Pair<>(server, usingRemoteImapDaemon);
