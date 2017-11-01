@@ -92,12 +92,27 @@ public class NginxLookupExtension implements ZimbraExtension {
                 LC.ldap_cache_reverseproxylookup_domain_maxsize.intValue(),
                 LC.ldap_cache_reverseproxylookup_domain_maxage.intValue() * Constants.MILLIS_PER_MINUTE);
 
-
     private static NginxLookupCache<ServerInfo> sServerCache =
         new NginxLookupCache<ServerInfo>(
                 LC.ldap_cache_reverseproxylookup_server_maxsize.intValue(),
                 LC.ldap_cache_reverseproxylookup_server_maxage.intValue() * Constants.MILLIS_PER_MINUTE);
 
+    private static final Map<String, Boolean> REV_PROXY_MAILHOST_ATTRS = new HashMap<>();
+    private static final Set<String> REV_PROXY_MAILHOST_EXTRA_ATTRS = new HashSet<>();
+    static {
+                REV_PROXY_MAILHOST_ATTRS.put(Provisioning.A_zimbraReverseProxyMailHostAttribute, true);
+                REV_PROXY_MAILHOST_ATTRS.put(Provisioning.A_zimbraReverseProxyUserNameAttribute, false);
+
+                REV_PROXY_MAILHOST_EXTRA_ATTRS.add(Provisioning.A_zimbraReverseProxyUseExternalRoute);
+                REV_PROXY_MAILHOST_EXTRA_ATTRS.add(Provisioning.A_zimbraExternalPop3Port);
+                REV_PROXY_MAILHOST_EXTRA_ATTRS.add(Provisioning.A_zimbraExternalPop3SSLPort);
+                REV_PROXY_MAILHOST_EXTRA_ATTRS.add(Provisioning.A_zimbraExternalImapPort);
+                REV_PROXY_MAILHOST_EXTRA_ATTRS.add(Provisioning.A_zimbraExternalImapSSLPort);
+                REV_PROXY_MAILHOST_EXTRA_ATTRS.add(Provisioning.A_zimbraExternalPop3Hostname);
+                REV_PROXY_MAILHOST_EXTRA_ATTRS.add(Provisioning.A_zimbraExternalPop3SSLHostname);
+                REV_PROXY_MAILHOST_EXTRA_ATTRS.add(Provisioning.A_zimbraExternalImapHostname);
+                REV_PROXY_MAILHOST_EXTRA_ATTRS.add(Provisioning.A_zimbraExternalImapSSLHostname);
+    }
 
     @Override
     public String getName() {
@@ -960,7 +975,10 @@ public class NginxLookupExtension implements ZimbraExtension {
                         throw new EntryNotFoundException("domain not found for user:" + authUser);
                     String[] DomainAllowedIPs = userdomain
                             .getMultiAttr(Provisioning.A_zimbraDomainAllowedIPs);
-                    ZimbraLog.nginxlookup.debug("Domain name is " + userdomain.getName() + " & DomainAllowedIPs list is " + Arrays.asList(DomainAllowedIPs));
+                    if (ZimbraLog.nginxlookup.isDebugEnabled()) {
+                        ZimbraLog.nginxlookup.debug("Domain name is %s & DomainAllowedIPs list is %s",
+                                userdomain.getName(), Arrays.asList(DomainAllowedIPs));
+                    }
 
                     int i = 0;
                     for (; i < DomainAllowedIPs.length; i++) {
@@ -981,55 +999,27 @@ public class NginxLookupExtension implements ZimbraExtension {
                 }
 
                 if (req.authMethod.equalsIgnoreCase(AUTHMETH_CERTAUTH)) {
-                	// for cert auth, no need to find the real route, just
-                	// send back zm_auth_token or zm_admin_auth_token
-                	sendResult(req, "127.0.0.1", "9999", authUser, false, false);
-                	return;
+                    // for cert auth, no need to find the real route, just
+                    // send back zm_auth_token or zm_admin_auth_token
+                    sendResult(req, "127.0.0.1", "9999", authUser, false, false);
+                    return;
                 }
 
                 // bug 37266, support proxy-side dns lookup
                 boolean doDnsLookup = true;
                 Server server = prov.getLocalServer();
                 if (server == null) {
-                    doDnsLookup = prov.getConfig().
-                                    getBooleanAttr(Provisioning.A_zimbraReverseProxyDnsLookupInServerEnabled, true);
+                    doDnsLookup = prov.getConfig().getBooleanAttr(
+                                            Provisioning.A_zimbraReverseProxyDnsLookupInServerEnabled, true);
                 } else {
-                    doDnsLookup = server.getBooleanAttr(Provisioning.A_zimbraReverseProxyDnsLookupInServerEnabled, true);
+                    doDnsLookup = server.getBooleanAttr(
+                            Provisioning.A_zimbraReverseProxyDnsLookupInServerEnabled, true);
                 }
-
-                Map<String, Boolean> attrs = new HashMap<String, Boolean>();
-                attrs.put(Provisioning.A_zimbraReverseProxyMailHostAttribute, true);
-                attrs.put(Provisioning.A_zimbraReverseProxyUserNameAttribute, false);
-
-                Set<String> extraAttrs = new HashSet<String>();
-                extraAttrs.add(Provisioning.A_zimbraReverseProxyUseExternalRoute);
-                extraAttrs.add(Provisioning.A_zimbraExternalPop3Port);
-                extraAttrs.add(Provisioning.A_zimbraExternalPop3SSLPort);
-                extraAttrs.add(Provisioning.A_zimbraExternalImapPort);
-                extraAttrs.add(Provisioning.A_zimbraExternalImapSSLPort);
-                extraAttrs.add(Provisioning.A_zimbraExternalPop3Hostname);
-                extraAttrs.add(Provisioning.A_zimbraExternalPop3SSLHostname);
-                extraAttrs.add(Provisioning.A_zimbraExternalImapHostname);
-                extraAttrs.add(Provisioning.A_zimbraExternalImapSSLHostname);
 
                 SearchDirResult sdr = null;
 
                 String authUserWithRealDomainName = authUser;
-                try {
-                    sdr = helper.searchDirectory(
-                            zlc,
-                            getUserSC(config),
-                            config,
-                            FilterId.NGINX_GET_MAILHOST,
-                            Provisioning.A_zimbraReverseProxyMailHostQuery,
-                            Provisioning.A_zimbraReverseProxyMailHostSearchBase,
-                            "USER",
-                            authUser,
-                            attrs,
-                            extraAttrs);
-                } catch (EntryNotFoundException e) {
-                    ZimbraLog.nginxlookup.debug("user " + authUser + " not found", e);
-                }
+                sdr = searchForReverseProxyMailHostInfo(zlc, config, authUser);
 
                 // not found.  Domain part of authUser could contain an alias domain name.
                 // If so, try the search again with the domain part converted to the real domain name.
@@ -1042,22 +1032,9 @@ public class NginxLookupExtension implements ZimbraExtension {
                     authUserWithRealDomainName = prov.getEmailAddrByDomainAlias(authUser);
 
                     if (authUserWithRealDomainName != null) {
-                        ZimbraLog.nginxlookup.debug("retrying with resolved domain alias: " + authUserWithRealDomainName);
-                        try {
-                            sdr = helper.searchDirectory(
-                                    zlc,
-                                    getUserSC(config),
-                                    config,
-                                    FilterId.NGINX_GET_MAILHOST,
-                                    Provisioning.A_zimbraReverseProxyMailHostQuery,
-                                    Provisioning.A_zimbraReverseProxyMailHostSearchBase,
-                                    "USER",
-                                    authUserWithRealDomainName,
-                                    attrs,
-                                    extraAttrs);
-                        } catch (EntryNotFoundException e) {
-                            ZimbraLog.nginxlookup.debug("user " + authUserWithRealDomainName + " not found", e);
-                        }
+                        ZimbraLog.nginxlookup.debug("retrying with resolved domain alias: %s",
+                                authUserWithRealDomainName);
+                        sdr = searchForReverseProxyMailHostInfo(zlc, config, authUserWithRealDomainName);
                     } else {
                         // no luck in alias domain lookup, set it back
                         authUserWithRealDomainName = authUser;
@@ -1070,7 +1047,6 @@ public class NginxLookupExtension implements ZimbraExtension {
                 //check to see if an IMAP request should be routed to an upstream IMAP server
                 if (req.proto.equals(IMAP) || req.proto.equals(IMAP_SSL)) {
                     Pair<Server, Boolean> imapServer = lookupUpstreamImapServer(req);
-
                     if (imapServer != null) {
                         String upstreamHost = imapServer.getFirst().getServiceHostname();
                         if (doDnsLookup) {
@@ -1088,29 +1064,16 @@ public class NginxLookupExtension implements ZimbraExtension {
 
                 // if still not found, see if we should use external route based on a domain setting
                 if (sdr == null) {
-                    DomainExternalRouteInfo domain = getDomainExternalRouteInfo(zlc, config, authUserWithRealDomainName);
-                    if (domain == null || !domain.useExternalRouteIfAccountNotExist())
-                        throw new EntryNotFoundException("user not found:" + authUserWithRealDomainName);
-
-                    mailhost = domain.getHostname(req.proto);
-                    port = domain.getPort(req.proto);
-
-                    if (mailhost == null || port == null)
-                        throw new EntryNotFoundException("user not found: " + authUserWithRealDomainName +
-                            ". domain " + domain.getDomainName() + " has " +
-                            Provisioning.A_zimbraReverseProxyUseExternalRouteIfAccountNotExist + " set to TRUE " +
-                            "but missing external route info on domain");
-                    if(doDnsLookup) {
-                        mailhost = this.getIPByIPMode(mailhost).getHostAddress();
-                    }
-                    sendResult(req, mailhost, port, authUser, false, false);
+                    useDomainExternalRoutingWhenNoUserFound(
+                            req, zlc, config, authUser, authUserWithRealDomainName, doDnsLookup);
                     return;
                 }
 
                 Map<String, String> vals = sdr.configuredAttrs;
                 String userName = vals.get(Provisioning.A_zimbraReverseProxyUserNameAttribute);
-                if (userName != null)
+                if (userName != null) {
                     authUser = authUserWithRealDomainName = userName;
+                }
 
                 //
                 // see if we should use external route
@@ -1129,7 +1092,8 @@ public class NginxLookupExtension implements ZimbraExtension {
                         domain = getDomainExternalRouteInfo(zlc, config, authUserWithRealDomainName);
                         if (domain == null) {
                             // don't throw, just fallback to use internal route
-                            ZimbraLog.nginxlookup.warn("cannot find domain for external route info, fallback to use internal route, user=" + authUserWithRealDomainName);
+                            ZimbraLog.nginxlookup.warn("cannot find domain for external route info, " +
+                                    "fallback to use internal route, user=%s", authUserWithRealDomainName);
                             domainNotFound = true;
                             useExternalRoute = false;
                         } else
@@ -1140,7 +1104,8 @@ public class NginxLookupExtension implements ZimbraExtension {
                 }
                 boolean externalRouteIncludeOriginalAuthusername = false;
                 if (useExternalRoute) {
-                    ZimbraLog.nginxlookup.debug("fetching external route for user " + authUserWithRealDomainName);
+                    ZimbraLog.nginxlookup.debug("fetching external route for user %s",
+                            authUserWithRealDomainName);
 
                     // get whether you need to include domain name
                     if (domain == null && !domainNotFound) {
@@ -1156,9 +1121,9 @@ public class NginxLookupExtension implements ZimbraExtension {
 
                     if (mailhost == null || port == null) {
                         // not set or not set completely on account, try domain
-
                         if (domain == null) {
-                            ZimbraLog.nginxlookup.warn("cannot find domain for external route info, fallback to use internal route, user=" + authUserWithRealDomainName );
+                            ZimbraLog.nginxlookup.warn("cannot find domain for external route info, " +
+                                    "fallback to use internal route, user=%s", authUserWithRealDomainName);
                         } else {
                             mailhost = domain.getHostname(req.proto);
                             port = domain.getPort(req.proto);
@@ -1168,20 +1133,20 @@ public class NginxLookupExtension implements ZimbraExtension {
                     // external host/port not set or not set completely on account/domain, null both and
                     // we will fallback to the internal route
                     if (mailhost == null || port == null) {
-                        ZimbraLog.nginxlookup.info("account " + authUserWithRealDomainName + " has " +
-                                    Provisioning.A_zimbraReverseProxyUseExternalRoute + " set to TRUE " +
-                                    " but missing external route info, fallback to use internal route");
+                        ZimbraLog.nginxlookup.info("account %s has %s set to TRUE but missing external " +
+                                "route info, fallback to use internal route", authUserWithRealDomainName,
+                                Provisioning.A_zimbraReverseProxyUseExternalRoute);
                         mailhost = null;
                         port = null;
                     } else
-                        ZimbraLog.nginxlookup.debug("external route for user " + authUserWithRealDomainName + ", host=" + mailhost + ", port =" + port);
+                        ZimbraLog.nginxlookup.debug("external route for user %s, host=%s, port=%s",
+                                authUserWithRealDomainName, mailhost, port);
                 }
 
-
                 // use internal route
-
-                if (mailhost == null)
+                if (mailhost == null) {
                     mailhost = vals.get(Provisioning.A_zimbraReverseProxyMailHostAttribute);
+                }
 
                 // get active servers
                 CuratorManager curatorManager = CuratorManager.getInstance();
@@ -1221,14 +1186,14 @@ public class NginxLookupExtension implements ZimbraExtension {
                     }
                 }
 
-                if (mailhost == null)
+                if (mailhost == null) {
                     throw new NginxLookupException("mailhost not found for user: "+req.user);
-
-                if (port == null)
+                }
+                if (port == null) {
                     port = getPortByMailhostAndProto(zlc, config, req, mailhost);
-
-                if(doDnsLookup) {
-                	mailhost = this.getIPByIPMode(mailhost).getHostAddress();
+                }
+                if (doDnsLookup) {
+                    mailhost = this.getIPByIPMode(mailhost).getHostAddress();
                 }
                 sendResult(req, mailhost, port, authUser, useExternalRoute, externalRouteIncludeOriginalAuthusername);
             } catch (NginxLookupException e) {
@@ -1242,6 +1207,45 @@ public class NginxLookupExtension implements ZimbraExtension {
             } finally {
                 helper.closeLdapContext(zlc);
             }
+        }
+
+        private SearchDirResult searchForReverseProxyMailHostInfo(
+                ILdapContext zlc, Config config, String authUser)
+                        throws NginxLookupException {
+            SearchDirResult sdr = null;
+            try {
+                sdr = helper.searchDirectory(zlc, getUserSC(config), config,
+                        FilterId.NGINX_GET_MAILHOST,
+                        Provisioning.A_zimbraReverseProxyMailHostQuery,
+                        Provisioning.A_zimbraReverseProxyMailHostSearchBase,
+                        "USER", authUser, REV_PROXY_MAILHOST_ATTRS, REV_PROXY_MAILHOST_EXTRA_ATTRS);
+            } catch (EntryNotFoundException e) {
+                ZimbraLog.nginxlookup.debug("user  not found", authUser, e);
+            }
+            return sdr;
+        }
+
+                // if still not found, see if we should use external route based on a domain setting
+        private void useDomainExternalRoutingWhenNoUserFound(NginxLookupRequest req, ILdapContext zlc,
+                Config config, String authUser, String authUserWithRealDomainName, boolean doDnsLookup)
+                        throws EntryNotFoundException, UnknownHostException, ServiceException {
+            DomainExternalRouteInfo domain = getDomainExternalRouteInfo(zlc, config, authUserWithRealDomainName);
+            if (domain == null || !domain.useExternalRouteIfAccountNotExist())
+                throw new EntryNotFoundException("user not found:" + authUserWithRealDomainName);
+
+            String mailhost = domain.getHostname(req.proto);
+            String port = domain.getPort(req.proto);
+
+            if (mailhost == null || port == null) {
+                throw new EntryNotFoundException(String.format(
+                        "User '%s' not found. No external route info on domain '%s' but '%s=TRUE'",
+                        authUserWithRealDomainName, domain.getDomainName(),
+                        Provisioning.A_zimbraReverseProxyUseExternalRouteIfAccountNotExist));
+            }
+            if(doDnsLookup) {
+                mailhost = this.getIPByIPMode(mailhost).getHostAddress();
+            }
+            sendResult(req, mailhost, port, authUser, false, false);
         }
 
         /** get the IP address of the host name according to current IP mode
@@ -1299,9 +1303,8 @@ public class NginxLookupExtension implements ZimbraExtension {
                 boolean useExternalRoute, boolean externalRouteIncludeOriginalAuthusername)
                         throws UnknownHostException {
             String authUser = origAuthUser;
-            ZimbraLog.nginxlookup.debug("mailhost=" + addr);
-            ZimbraLog.nginxlookup.debug("port=" + port);
-            ZimbraLog.nginxlookup.debug("clientIp=" + req.clientIp);
+            ZimbraLog.nginxlookup.debug("SendingResult mailhost=%s port=%s clientIp=%s",
+                    addr, port, req.clientIp);
 
             HttpServletResponse resp = req.httpResp;
             resp.setStatus(HttpServletResponse.SC_OK);
@@ -1325,11 +1328,15 @@ public class NginxLookupExtension implements ZimbraExtension {
             }
 
             if (authUser != null) {
-                ZimbraLog.nginxlookup.debug("rewrite " + AUTH_USER + " to: " + authUser);
                 /* encode authUser, %-->%25 ' '-->%20 */
-                authUser = authUser.replace(" ", "%20");
-                authUser = authUser.replace("%", "%25");
-                resp.addHeader(AUTH_USER, authUser);
+                String respAuthUser = authUser.replace(" ", "%20").replace("%", "%25");
+                if (authUser.equals(respAuthUser)) {
+                    ZimbraLog.nginxlookup.debug("Response Header - add %s: '%s'", AUTH_USER, authUser);
+                } else {
+                    ZimbraLog.nginxlookup.debug("Response Header - rewrite %s '%s' to: '%s'",
+                            AUTH_USER, authUser, respAuthUser);
+                }
+                resp.addHeader(AUTH_USER, respAuthUser);
             }
 
             if (req.authMethod.equalsIgnoreCase(AUTHMETH_GSSAPI)) {
