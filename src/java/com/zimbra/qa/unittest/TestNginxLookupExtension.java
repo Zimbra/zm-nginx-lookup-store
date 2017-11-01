@@ -208,15 +208,23 @@ public class TestNginxLookupExtension {
         protected void assertBasic(String expectedUser, String expectedServer, String expectedPort) {
             assertAuthStatusOK();
             assertAuthUser(expectedUser);
-            assertAuthServer(expectedServer);
+            // setupExternalRoute uses localhost as a test target which naturally maps to 127.0.0.1
+            // Was fooled into thinking that when the error reported the IP address of the mailbox
+            // instead of this, that was a benign failure.  Changed to validating port before server
+            // as it will be more obvious there is a genuine problem then.
             assertAuthPort(expectedPort);
+            assertAuthServer(expectedServer);
         }
 
         protected void assertBasic(String expectedUser, String expectedServer, String[] expectedPorts) {
             assertAuthStatusOK();
             assertAuthUser(expectedUser);
-            assertAuthServer(expectedServer);
+            // setupExternalRoute uses localhost as a test target which naturally maps to 127.0.0.1
+            // Was fooled into thinking that when the error reported the IP address of the mailbox
+            // instead of this, that was a benign failure.  Changed to validating port before server
+            // as it will be more obvious there is a genuine problem then.
             assertAuthPort(expectedPorts);
+            assertAuthServer(expectedServer);
         }
     }
 
