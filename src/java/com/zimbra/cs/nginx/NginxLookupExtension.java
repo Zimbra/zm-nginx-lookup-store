@@ -936,7 +936,6 @@ public class NginxLookupExtension implements ZimbraExtension {
                 conn.host = server.getServiceHostname();
                 conn.port = getUpstreamIMAPPort(server, req.proto, true);
             }
-            return;
         }
 
         private String getUpstreamIMAPPort(Server server, String proto, Boolean useRemoteImap) throws ServiceException {
@@ -1192,9 +1191,6 @@ public class NginxLookupExtension implements ZimbraExtension {
             if (domain == null) {
                 domain = getDomainExternalRouteInfo(zlc, config, authUserWithRealDomainName);
             }
-            boolean externalRouteIncludeOriginalAuthusername = (domain == null) ?
-                    prov.getDefaultDomain().isReverseProxyExternalRouteIncludeOriginalAuthusername() :
-                    domain.externalRouteIncludeOriginalAuthusername();
 
             // get external host/port on account
             conn.host = getExternalHostnameOnAccount(req.proto, extraAttrsVals);
@@ -1219,10 +1215,18 @@ public class NginxLookupExtension implements ZimbraExtension {
                         Provisioning.A_zimbraReverseProxyUseExternalRoute);
                 conn.host = null;
                 conn.port = null;
-            } else
+            } else {
                 ZimbraLog.nginxlookup.debug("external route for user %s, host=%s, port=%s",
                         authUserWithRealDomainName, conn.host, conn.port);
-            return externalRouteIncludeOriginalAuthusername;
+            }
+            return externalRouteIncludeOriginalAuthusername(domain);
+        }
+
+        private boolean externalRouteIncludeOriginalAuthusername(DomainExternalRouteInfo domain)
+                throws ServiceException {
+            return (domain == null) ?
+                    prov.getDefaultDomain().isReverseProxyExternalRouteIncludeOriginalAuthusername() :
+                    domain.externalRouteIncludeOriginalAuthusername();
         }
 
         /**
