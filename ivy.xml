@@ -7,8 +7,9 @@
  <dependencies>
   <dependency org="junit" name="junit" rev="4.8.2" />
   <dependency org="servlet-api" name="servlet-api" rev="3.1" />
-  <dependency org="commons-httpclient" name="commons-httpclient" rev="3.1" />
   <dependency org="commons-logging" name="commons-logging" rev="1.0" />
+  <dependency org="org.apache.httpcomponents" name="httpclient" rev="4.5.5"/>
+  <dependency org="org.apache.httpcomponents" name="httpcore" rev="4.4.9"/>
   <dependency org="commons-net" name="commons-net" rev="3.3" />
   <dependency org="org.javassist" name="javassist" rev="3.22.0-CR2" />
   <dependency org="org.objenesis" name="objenesis" rev="2.6" />

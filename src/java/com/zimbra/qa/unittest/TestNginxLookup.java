@@ -28,9 +28,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.httpclient.Header;
-import org.apache.commons.httpclient.HttpClient;
-import org.apache.commons.httpclient.methods.GetMethod;
+import org.apache.http.Header;
+import org.apache.http.HttpException;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -40,10 +43,12 @@ import org.junit.rules.TestName;
 
 import com.zimbra.common.account.Key;
 import com.zimbra.common.account.Key.AccountBy;
+import com.zimbra.common.httpclient.HttpClientUtil;
 import com.zimbra.common.localconfig.LC;
 import com.zimbra.common.service.ServiceException;
 import com.zimbra.common.soap.AdminConstants;
 import com.zimbra.common.util.CliUtil;
+import com.zimbra.common.util.ZimbraHttpConnectionManager;
 import com.zimbra.common.util.ZimbraLog;
 import com.zimbra.cs.account.Account;
 import com.zimbra.cs.account.Config;
@@ -699,16 +704,16 @@ public class TestNginxLookup {
         mSoapProv.modifyAttrs(config, attrs);
     }
 
-    private Result doLookupReq(HttpClient client, GetMethod method) {
+    private Result doLookupReq(HttpClientBuilder client, HttpGet method) {
         try {
-            int statusCode = client.executeMethod(method);
+            HttpResponse response = HttpClientUtil.executeMethod(client.build(), method);
 
-            Header authStatus = method.getResponseHeader(NginxLookupExtension.NginxLookupHandler.AUTH_STATUS);
-            Header authServer = method.getResponseHeader(NginxLookupExtension.NginxLookupHandler.AUTH_SERVER);
-            Header authPort = method.getResponseHeader(NginxLookupExtension.NginxLookupHandler.AUTH_PORT);
-            Header authUser = method.getResponseHeader(NginxLookupExtension.NginxLookupHandler.AUTH_USER);
-            Header authWait = method.getResponseHeader(NginxLookupExtension.NginxLookupHandler.AUTH_WAIT);
-            Header authPassword = method.getResponseHeader(NginxLookupExtension.NginxLookupHandler.AUTH_PASS);
+            Header authStatus = response.getFirstHeader(NginxLookupExtension.NginxLookupHandler.AUTH_STATUS);
+            Header authServer = response.getFirstHeader(NginxLookupExtension.NginxLookupHandler.AUTH_SERVER);
+            Header authPort = response.getFirstHeader(NginxLookupExtension.NginxLookupHandler.AUTH_PORT);
+            Header authUser = response.getFirstHeader(NginxLookupExtension.NginxLookupHandler.AUTH_USER);
+            Header authWait = response.getFirstHeader(NginxLookupExtension.NginxLookupHandler.AUTH_WAIT);
+            Header authPassword = response.getFirstHeader(NginxLookupExtension.NginxLookupHandler.AUTH_PASS);
 
             return new Result(authStatus==null?null:authStatus.getValue(),
                               authServer==null?null:authServer.getValue(),
@@ -717,7 +722,7 @@ public class TestNginxLookup {
                               authWait==null?null:authWait.getValue(),
                               authPassword==null?null:authPassword.getValue());
 
-        } catch (IOException e) {
+        } catch (IOException | HttpException e) {
             ZimbraLog.test.error("Failed to do Lookup request for test %s", name.getMethodName(), e);
         }
 
@@ -740,40 +745,40 @@ public class TestNginxLookup {
                                  String h_AUTH_ADMIN_USER,
                                  String h_AUTH_ADMIN_PASS) {
 
-        HttpClient client = new HttpClient();
-        GetMethod method = new GetMethod(URL);
+        HttpClientBuilder client = ZimbraHttpConnectionManager.getInternalHttpConnMgr().newHttpClient();
+        HttpGet method = new HttpGet(URL);
 
-        method.setRequestHeader("Host", "localhost");
+        method.addHeader("Host", "localhost");
         if (h_AUTH_METHOD != null)
-            method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.AUTH_METHOD, h_AUTH_METHOD);
+            method.addHeader(NginxLookupExtension.NginxLookupHandler.AUTH_METHOD, h_AUTH_METHOD);
 
 
         if (h_AUTH_USER != null) {
             String nginxEncoded = similateNginxEncodeUserAndPass(h_AUTH_USER);
-            method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.AUTH_USER, nginxEncoded);
+            method.addHeader(NginxLookupExtension.NginxLookupHandler.AUTH_USER, nginxEncoded);
         }
 
         if (h_AUTH_PASS != null) {
             String nginxEncoded = similateNginxEncodeUserAndPass(h_AUTH_PASS);
-            method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.AUTH_PASS, nginxEncoded);
+            method.addHeader(NginxLookupExtension.NginxLookupHandler.AUTH_PASS, nginxEncoded);
         }
 
         if (h_AUTH_PROTOCOL != null)
-            method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.AUTH_PROTOCOL, h_AUTH_PROTOCOL);
+            method.addHeader(NginxLookupExtension.NginxLookupHandler.AUTH_PROTOCOL, h_AUTH_PROTOCOL);
         if (h_AUTH_LOGIN_ATTEMPT != null)
-            method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.AUTH_LOGIN_ATTEMPT, h_AUTH_LOGIN_ATTEMPT);
+            method.addHeader(NginxLookupExtension.NginxLookupHandler.AUTH_LOGIN_ATTEMPT, h_AUTH_LOGIN_ATTEMPT);
         if (h_CLIENT_IP != null)
-            method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.CLIENT_IP, h_CLIENT_IP);
+            method.addHeader(NginxLookupExtension.NginxLookupHandler.CLIENT_IP, h_CLIENT_IP);
         if (h_SERVER_IP != null)
-            method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.SERVER_IP, h_SERVER_IP);
+            method.addHeader(NginxLookupExtension.NginxLookupHandler.SERVER_IP, h_SERVER_IP);
         if (h_SERVER_HOST != null)
-            method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.SERVER_HOST, h_SERVER_HOST);
+            method.addHeader(NginxLookupExtension.NginxLookupHandler.SERVER_HOST, h_SERVER_HOST);
         if (h_AUTH_ID != null)
-            method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.AUTH_ID, h_AUTH_ID);
+            method.addHeader(NginxLookupExtension.NginxLookupHandler.AUTH_ID, h_AUTH_ID);
         if (h_AUTH_ADMIN_USER != null)
-            method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.AUTH_ADMIN_USER, h_AUTH_ADMIN_USER);
+            method.addHeader(NginxLookupExtension.NginxLookupHandler.AUTH_ADMIN_USER, h_AUTH_ADMIN_USER);
         if (h_AUTH_ADMIN_PASS != null)
-            method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.AUTH_ADMIN_PASS, h_AUTH_ADMIN_PASS);
+            method.addHeader(NginxLookupExtension.NginxLookupHandler.AUTH_ADMIN_PASS, h_AUTH_ADMIN_PASS);
 
         return doLookupReq(client, method);
     }
