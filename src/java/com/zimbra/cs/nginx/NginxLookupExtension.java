@@ -183,6 +183,7 @@ public class NginxLookupExtension implements ZimbraExtension {
         protected String principal;
         protected int loginAttempt;
         protected boolean isZimbraAdmin;
+        protected boolean isZimbraZx;
         protected String adminUser;
         protected String adminPass;
         protected HttpServletRequest  httpReq;
@@ -196,6 +197,7 @@ public class NginxLookupExtension implements ZimbraExtension {
         public static final String AUTH_PASS          = "Auth-Pass";
         public static final String AUTH_PROTOCOL      = "Auth-Protocol";
         public static final String AUTH_ZIMBRA_ADMIN  = "Auth-Zimbra-Admin";
+        public static final String AUTH_ZIMBRA_ZX     = "Auth-Zimbra-Zx";
         public static final String AUTH_LOGIN_ATTEMPT = "Auth-Login-Attempt";
         public static final String CLIENT_IP          = "Client-IP";
         public static final String SERVER_IP          = "X-Proxy-IP";
@@ -370,6 +372,7 @@ public class NginxLookupExtension implements ZimbraExtension {
             req.serverHost      = httpReq.getHeader(SERVER_HOST);           /* (HTTP) Host header */
             req.loginAttempt    = 1;
             req.isZimbraAdmin   = false;
+            req.isZimbraZx      = false;
 
 
             /* Complain if any required fields are missing */
@@ -419,6 +422,11 @@ public class NginxLookupExtension implements ZimbraExtension {
             String isZimbraAdmin = httpReq.getHeader(AUTH_ZIMBRA_ADMIN);
             if (isZimbraAdmin != null) {
                 req.isZimbraAdmin = Boolean.parseBoolean (isZimbraAdmin);
+            }
+
+            String isZimbraZx = httpReq.getHeader(AUTH_ZIMBRA_ZX);
+            if (isZimbraZx != null) {
+                req.isZimbraZx = Boolean.parseBoolean (isZimbraZx);
             }
 
             return req;
@@ -711,7 +719,7 @@ public class NginxLookupExtension implements ZimbraExtension {
                 sServerCache.put(serverInfo);
             }
 
-            port = serverInfo.getPortForProto(req.proto, req.isZimbraAdmin);
+            port = serverInfo.getPortForProto(req.proto, req.isZimbraAdmin, req.isZimbraZx);
             if (port == null)
                 throw new NginxLookupException("missing port for protocol " + req.proto + " on server " + mailhost);
 
