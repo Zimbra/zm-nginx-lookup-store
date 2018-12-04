@@ -171,6 +171,13 @@ public class NginxLookupExtension implements ZimbraExtension {
         }
     }
 
+    public enum NginxLookupRequestType
+    {
+        web,
+        admin,
+        zx
+    }
+
     public static class NginxLookupRequest {
         protected String user;
         protected String cuser;
@@ -182,8 +189,7 @@ public class NginxLookupExtension implements ZimbraExtension {
         protected String serverHost;
         protected String principal;
         protected int loginAttempt;
-        protected boolean isZimbraAdmin;
-        protected boolean isZimbraZx;
+        protected NginxLookupRequestType type;
         protected String adminUser;
         protected String adminPass;
         protected HttpServletRequest  httpReq;
@@ -371,8 +377,7 @@ public class NginxLookupExtension implements ZimbraExtension {
             req.serverIp        = httpReq.getHeader(SERVER_IP);             /* Incoming Proxy Interface IP */
             req.serverHost      = httpReq.getHeader(SERVER_HOST);           /* (HTTP) Host header */
             req.loginAttempt    = 1;
-            req.isZimbraAdmin   = false;
-            req.isZimbraZx      = false;
+            req.type            = NginxLookupRequestType.web;
 
 
             /* Complain if any required fields are missing */
@@ -419,14 +424,18 @@ public class NginxLookupExtension implements ZimbraExtension {
                 }
             }
 
-            String isZimbraAdmin = httpReq.getHeader(AUTH_ZIMBRA_ADMIN);
-            if (isZimbraAdmin != null) {
-                req.isZimbraAdmin = Boolean.parseBoolean (isZimbraAdmin);
-            }
-
             String isZimbraZx = httpReq.getHeader(AUTH_ZIMBRA_ZX);
             if (isZimbraZx != null) {
-                req.isZimbraZx = Boolean.parseBoolean (isZimbraZx);
+                if( Boolean.parseBoolean (isZimbraZx) ) {
+                    req.type = NginxLookupRequestType.zx;
+                }
+            }
+
+            String isZimbraAdmin = httpReq.getHeader(AUTH_ZIMBRA_ADMIN);
+            if (isZimbraAdmin != null) {
+                if( Boolean.parseBoolean (isZimbraAdmin) ) {
+                    req.type = NginxLookupRequestType.admin;
+                }
             }
 
             return req;
@@ -575,7 +584,7 @@ public class NginxLookupExtension implements ZimbraExtension {
             verifyNginxAdmin(config, req);
 
             try {
-                if (req.isZimbraAdmin) {
+                if (req.type == NginxLookupRequestType.admin) {
                     return AuthProvider.getAuthToken(authc, true).getEncoded();
                 } else {
                     return AuthProvider.getAuthToken(authc).getEncoded();
@@ -719,7 +728,7 @@ public class NginxLookupExtension implements ZimbraExtension {
                 sServerCache.put(serverInfo);
             }
 
-            port = serverInfo.getPortForProto(req.proto, req.isZimbraAdmin, req.isZimbraZx);
+            port = serverInfo.getPortForProto(req.proto, req.type);
             if (port == null)
                 throw new NginxLookupException("missing port for protocol " + req.proto + " on server " + mailhost);
 
@@ -972,7 +981,7 @@ public class NginxLookupExtension implements ZimbraExtension {
 
                 // verify the account is an admin or delegated admin when request ask for admin
                 // route, certauth, ...
-                if(req.isZimbraAdmin) {
+                if(req.type == NginxLookupRequestType.admin) {
                     verifyAccountAdmin(authUser, req.authMethod);
                 }
 
