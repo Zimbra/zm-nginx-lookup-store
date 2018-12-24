@@ -17,7 +17,9 @@
 package com.zimbra.cs.nginx;
 
 public class ServerInfo extends LookupEntry {
-    
+    private static final String ZX_HTTP_PORT = "8742";
+    private static final String ZX_HTTPS_PORT = "8743";
+
     private String mHttpPort;
     private String mHttpSSLPort;
     private String mHttpAdminPort;
@@ -58,7 +60,7 @@ public class ServerInfo extends LookupEntry {
         mHttpImapSSLPort = port;
     }
     
-    String getPortForProto(String proto, boolean isZimbraAdmin) {
+    String getPortForProto(String proto, NginxLookupExtension.NginxLookupRequestType type) {
         if (NginxLookupExtension.NginxLookupHandler.POP3.equalsIgnoreCase(proto))
             return mHttpPop3Port;
         else if (NginxLookupExtension.NginxLookupHandler.POP3_SSL.equalsIgnoreCase(proto))
@@ -68,9 +70,15 @@ public class ServerInfo extends LookupEntry {
         else if (NginxLookupExtension.NginxLookupHandler.IMAP_SSL.equalsIgnoreCase(proto))
             return mHttpImapSSLPort;
         else if (NginxLookupExtension.NginxLookupHandler.HTTP.equalsIgnoreCase(proto)) {
-            return mHttpPort;            
+            if (type == NginxLookupExtension.NginxLookupRequestType.zx) {
+                return ZX_HTTP_PORT;
+            } else {
+                return mHttpPort;
+            }
         } else if (NginxLookupExtension.NginxLookupHandler.HTTP_SSL.equalsIgnoreCase(proto)) {
-            if (isZimbraAdmin) {
+            if (type == NginxLookupExtension.NginxLookupRequestType.zx) {
+                return ZX_HTTPS_PORT;
+            } else if (type == NginxLookupExtension.NginxLookupRequestType.admin) {
                 return mHttpAdminPort;
             } else {
                 return mHttpSSLPort;
