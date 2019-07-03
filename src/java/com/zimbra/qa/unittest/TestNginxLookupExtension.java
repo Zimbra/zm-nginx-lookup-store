@@ -26,9 +26,11 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.commons.httpclient.Header;
-import org.apache.commons.httpclient.HttpClient;
-import org.apache.commons.httpclient.methods.GetMethod;
+import org.apache.http.Header;
+import org.apache.http.HttpException;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -37,8 +39,10 @@ import org.junit.rules.TestName;
 
 import com.google.common.base.Joiner;
 import com.zimbra.common.account.Key;
+import com.zimbra.common.httpclient.HttpClientUtil;
 import com.zimbra.common.localconfig.LC;
 import com.zimbra.common.service.ServiceException;
+import com.zimbra.common.util.ZimbraHttpConnectionManager;
 import com.zimbra.common.util.ZimbraLog;
 import com.zimbra.cs.account.Account;
 import com.zimbra.cs.account.Domain;
@@ -130,15 +134,15 @@ public class TestNginxLookupExtension {
         String h_AUTH_ADMIN_PASS,
         */
 
-        protected void setRequestHeader(GetMethod method) {
+        protected void setRequestHeader(HttpGet method) {
             if (mAuthMethod != null)
-                method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.AUTH_METHOD, mAuthMethod.name());
+                method.addHeader(NginxLookupExtension.NginxLookupHandler.AUTH_METHOD, mAuthMethod.name());
             if (mAuthUser != null)
-                method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.AUTH_USER, mAuthUser);
+                method.addHeader(NginxLookupExtension.NginxLookupHandler.AUTH_USER, mAuthUser);
             if (mAuthPass != null)
-                method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.AUTH_PASS, mAuthPass);
+                method.addHeader(NginxLookupExtension.NginxLookupHandler.AUTH_PASS, mAuthPass);
             if (mAuthProtocol != null)
-                method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.AUTH_PROTOCOL, mAuthProtocol.name());
+                method.addHeader(NginxLookupExtension.NginxLookupHandler.AUTH_PROTOCOL, mAuthProtocol.name());
             /*
             if (h_AUTH_LOGIN_ATTEMPT != null)
                 method.setRequestHeader(NginxLookupExtension.NginxLookupHandler.AUTH_LOGIN_ATTEMPT, h_AUTH_LOGIN_ATTEMPT);
@@ -228,23 +232,23 @@ public class TestNginxLookupExtension {
         }
     }
 
-    private RespHeaders senRequest(LookupData lookupData) throws IOException {
+    private RespHeaders senRequest(LookupData lookupData) throws IOException, HttpException {
         String url = "https://localhost:7072/service/extension/nginx-lookup";
 
-        HttpClient client = new HttpClient();
-        GetMethod method = new GetMethod(url);
+        HttpClientBuilder client = ZimbraHttpConnectionManager.getInternalHttpConnMgr().newHttpClient();
+        HttpGet method = new HttpGet(url);
 
-        method.setRequestHeader("Host", "localhost");
+        method.addHeader("Host", "localhost");
         lookupData.setRequestHeader(method);
 
         RespHeaders respHdrs = new RespHeaders();
         try {
-            client.executeMethod(method);
+            HttpResponse response = HttpClientUtil.executeMethod(client.build(), method);
 
-            for (Header header : method.getResponseHeaders())
+            for (Header header : response.getAllHeaders())
                 respHdrs.add(header);
 
-        } catch (IOException e) {
+        } catch (IOException | HttpException e) {
             ZimbraLog.test.error("Problem executing HTTP method", e);
             throw e;
         }
