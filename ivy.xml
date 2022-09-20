@@ -17,7 +17,8 @@
   <dependency org="cglib" name="cglib" rev="3.2.5"/>
   <dependency org="asm" name="asm" rev="3.3.1"/>
   <dependency org="org.dom4j" name="dom4j" rev="${dom4j.version}"/>
-  <dependency org="log4j" name="log4j" rev="1.2.17"/>
+  <dependency org="org.apache.logging.log4j" name="log4j-core" rev="${log4j.core.version}" />
+  <dependency org="org.apache.logging.log4j" name="log4j-api" rev="${log4j.api.version}" />
   <dependency org="com.google.guava" name="guava" rev="${com.google.guava.version}" />
   <dependency org="com.unboundid" name="unboundid-ldapsdk" rev="4.0.0"/>
   <dependency org="org.easymock" name="easymock" rev="3.4" />
