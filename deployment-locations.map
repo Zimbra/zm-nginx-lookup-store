@@ -1,0 +1,1 @@
+build/dist/zm-nginx-lookup-store*.jar => /opt/zimbra/lib/ext/nginx-lookup/nginx-lookup.jar
