@@ -1153,7 +1153,12 @@ public class NginxLookupExtension implements ZimbraExtension {
             DomainExternalRouteInfo domain =
                     getDomainExternalRouteInfo(zlc, config, authUserWithRealDomainName);
             if (domain == null || !domain.useExternalRouteIfAccountNotExist()) {
-                throw new EntryNotFoundException("user not found:" + authUserWithRealDomainName);
+                String errorMsg = "user not found:" + authUserWithRealDomainName;
+                if (LC.zimbra_additional_logging.booleanValue()) {
+                    errorMsg = "Error occurred during authentication: account not found for [" +  authUserWithRealDomainName + "]. oip=" + req.clientIp;
+                    ZimbraLog.security.info(errorMsg);
+                }
+                throw new EntryNotFoundException(errorMsg);
             }
 
             String mailhost = domain.getHostname(req.proto);
