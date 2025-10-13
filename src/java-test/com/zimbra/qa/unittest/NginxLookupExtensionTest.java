@@ -22,6 +22,7 @@ import java.util.HashMap;
 import javax.servlet.http.HttpServletRequest;
 
 import org.easymock.EasyMock;
+import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;

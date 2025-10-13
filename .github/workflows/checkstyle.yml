@@ -1,0 +1,30 @@
+name: Java Checkstyle
+
+on: [pull_request]
+
+jobs:
+  checkstyle:
+    name: Run Checkstyle
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the PR repo
+      - uses: actions/checkout@v4
+
+      # Checkout the repository where checkstyle.xml is maintained
+      - name: Checkout Checkstyle Config
+        uses: actions/checkout@v4
+        with:
+          repository: Zimbra/zimbra-dev-env
+          ref: ZCICD-15
+          path: checkstyle-config
+          token: ${{ secrets.CHECKSTYLE }}
+
+      # Run checkstyle
+      - uses: dbelyaev/action-checkstyle@b660daa6be4120416b16213522e673c5b1fd772c # v2.1.0
+        with:
+          reporter: github-pr-review
+          checkstyle_version: "9.3"
+          level: error
+          fail_level: error
+          filter_mode: added
+          checkstyle_config: checkstyle-config/config/checkstyle/checkstyle.xml
