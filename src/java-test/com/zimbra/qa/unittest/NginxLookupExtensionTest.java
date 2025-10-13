@@ -18,6 +18,7 @@
 package com.zimbra.qa.unittest;
 
 import java.util.HashMap;
+import java.util.HashMaps;
 
 import javax.servlet.http.HttpServletRequest;
 
