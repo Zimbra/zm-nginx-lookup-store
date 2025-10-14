@@ -1,0 +1,11 @@
+# Java Checkstyle
+name: Java Checkstyle
+
+on:
+  pull_request:
+
+jobs:
+  call-checkstyle:
+    uses: Zimbra/zimbra-dev-env/.github/workflows/reusable-checkstyle.yml@ZCICD-15_1
+    secrets:
+      CHECKSTYLE: ${{ secrets.CHECKSTYLE }}
